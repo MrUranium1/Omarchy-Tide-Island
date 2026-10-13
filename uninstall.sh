@@ -163,6 +163,20 @@ else
   log "kept the bundled runtime (pass --remove-runtime to remove it)."
 fi
 
+# -------------------------------------------------------------- tide config
+
+# Remove the userconfig.json we seeded for first-time Tide installs, but only
+# while it still matches the shipped default untouched (a customized config is
+# the user's own and stays).
+tide_userconfig="$HOME/.config/tide-island/userconfig.json"
+if [[ -f $tide_userconfig && -f "$ROOT/default/tide-userconfig.json" ]] \
+  && cmp -s "$tide_userconfig" "$ROOT/default/tide-userconfig.json"; then
+  rm -f "$tide_userconfig"
+  log "removed seeded $tide_userconfig (still the untouched plugin default)."
+else
+  log "left $tide_userconfig in place (customized, or not seeded by this plugin)."
+fi
+
 # ------------------------------------------------------------------ plugin
 
 if (( flag_remove_plugin )); then

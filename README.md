@@ -59,7 +59,9 @@ installs the user `tide-island.service`, adds the CLI shims, seeds the config,
 creates + patches the OSD/notification clones and wires the keybinding. The
 Tide Island **Settings** app is bundled too — open it from the app menu
 ("Tide Island Settings") or run `tide-island-config-app`. Then the island
-appears whenever the bar is hidden.
+appears whenever the bar is hidden. On a machine with no Tide config yet, it
+also seeds Tide's own `~/.config/tide-island/userconfig.json` once with the
+default island look below (existing configs are never overwritten).
 
 ### Manual install
 
@@ -75,7 +77,9 @@ Either path does all of this, safely:
    (skipped when you already have `tide-island` on `PATH`), then the
    `omarchy-tide-island-toggle` / `omarchy-tide-island-status` commands into
    `~/.local/bin/`.
-2. Seeds `~/.config/omarchy/tide-island.json` (only if absent).
+2. Seeds `~/.config/omarchy/tide-island.json` (only if absent), and — only when
+   you have no Tide config yet — `~/.config/tide-island/userconfig.json` with the
+   default island look (below).
 3. Clones `omarchy.osd` / `omarchy.notifications` into your config (only if
    you don't have clones yet) and patches them to stand down while the flag
    is present. Never touches the built-ins. Every file we modify is backed up
@@ -123,6 +127,25 @@ keys you want to change):
 | `serviceName`          | systemd unit to start/stop.                               |
 | `togglesDir` / `barOffFile` | Where the bar-off flag lives.                       |
 
+## Default island look
+
+The first install seeds Tide's own `userconfig.json` (only when you have none)
+with this small look. Every other setting stays at Tide Island's own defaults:
+
+```json
+{
+  "islandExclusiveZone": 9,
+  "islandTopMargin": 1,
+  "islandBackgroundOpacity": 100,
+  "islandHeight": 36,
+  "islandWidth": 140
+}
+```
+
+i.e. Reserved Top Space 9, Top Margin 1, Background Transparency 100 (opaque),
+island 36 px tall and 140 px wide. This is a one-time seed — changing or
+removing it later is entirely yours; the settings app reflects it normally.
+
 ## Optional: swipe-lyrics without album art
 
 A purely personal change to Tide Island itself (remove the cover thumbnail in
@@ -135,9 +158,9 @@ scripts/patch-tide-lyrics.sh --restore    # undoes it
 
 ## What this never touches
 
-- `~/.config/tide-island/` (your Tide Island settings) — never written by the
-  plugin. It is only created by the bundled Settings app when you change a
-  setting.
+- `~/.config/tide-island/userconfig.json` — never overwritten. When you have no
+  Tide config at all, the first install seeds it once with the default island
+  look (above); a config you already had or later change is left entirely alone.
 - Your Tide QML override / `~/.local/share/tide-island/` — never. The bundled
   runtime is installed to a separate prefix (`~/.local/share/omarchy-tide-island`)
   so it cannot collide with an override you already have.

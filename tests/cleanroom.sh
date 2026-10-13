@@ -97,6 +97,7 @@ chmod +x "$BIN"/*
 PLUGINS="$HOME/.config/omarchy/plugins"
 STATE="$HOME/.local/state/omarchy/tide-island"
 CONFIG="$HOME/.config/omarchy/tide-island.json"
+TIDE_USERCONFIG="$HOME/.config/tide-island/userconfig.json"
 FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
 svc() { cat "$HOME/.local/state/omarchy/fake-systemd/tide-island.service" 2>/dev/null || echo inactive; }
 
@@ -116,6 +117,10 @@ PREFIX="$HOME/.local/share/omarchy-tide-island"
 [[ -f "$HOME/.local/share/applications/tide-island.desktop" ]] && ok "desktop entry installed" || ko "desktop entry missing"
 [[ -f "$HOME/.local/share/applications/tide-island-config.desktop" ]] && ok "settings desktop entry installed" || ko "settings desktop entry missing"
 [[ -f "$CONFIG" ]] && ok "config seeded" || ko "config not seeded"
+[[ -f "$TIDE_USERCONFIG" ]] && cmp -s "$TIDE_USERCONFIG" "$ROOT/default/tide-userconfig.json" \
+  && ok "Tide userconfig seeded with the default look" || ko "Tide userconfig not seeded"
+jq -e '.tideUserConfig.seeded == true' "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "installed.json records the Tide config seed" || ko "installed.json missing tideUserConfig"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "osd clone patched" || ko "osd clone not patched"
 grep -q 'popupsSuppressed' "$PLUGINS/mehir.notifications/Service.qml" 2>/dev/null && ok "notifications clone patched" || ko "notifications clone not patched"
 [[ "$(cat "$STATE/patch-state/mehir.osd" 2>/dev/null)" == applied ]] && ok "osd recorded 'applied'" || ko "osd state not recorded"
@@ -137,12 +142,14 @@ b1=$(find "$STATE/backups" -type f 2>/dev/null | wc -l)
 [[ "$b0" == "$b1" ]] && ok "no duplicate backups on re-run" || ko "backups grew ($b0 -> $b1)"
 [[ "$(find "$PLUGINS" -maxdepth 1 -name '*.osd' | wc -l)" == 1 ]] && ok "clone not duplicated" || ko "clone duplicated"
 jq -e '.suppression.osd.createdByUs == true' "$STATE/installed.json" >/dev/null 2>&1 && ok "createdByUs preserved across re-run" || ko "createdByUs lost on re-run"
+cmp -s "$TIDE_USERCONFIG" "$ROOT/default/tide-userconfig.json" && ok "seeded Tide config preserved on re-run" || ko "seeded Tide config changed on re-run"
 [[ "$(cat "$PREFIX/.version" 2>/dev/null)" == "$(cat "$ROOT/vendor/tide-island/VERSION")" ]] && ok "runtime version marker intact after re-run" || ko "runtime version marker changed"
 
 echo "  uninstall (default)"
 (cd "$ROOT" && bash uninstall.sh) >"$SB/u1.log" 2>&1 && ok "uninstall exits 0" || { ko "uninstall failed"; tail -n20 "$SB/u1.log"; }
 [[ ! -e "$HOME/.local/bin/omarchy-tide-island-toggle" ]] && ok "shim removed" || ko "shim remains"
 [[ -f "$CONFIG" ]] && ok "config preserved by default" || ko "config removed by default"
+[[ ! -f "$TIDE_USERCONFIG" ]] && ok "untouched seeded Tide config removed on uninstall" || ko "seeded Tide config remains"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ko "patch not reverted" || ok "clone patch reverted"
 
 echo "  uninstall --remove-plugin --purge-config"
@@ -153,6 +160,10 @@ echo "  uninstall --remove-plugin --purge-config"
 echo "  reinstall"
 (cd "$ROOT" && bash install.sh) >"$SB/i3.log" 2>&1 && ok "reinstall exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i3.log"; }
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "reinstalled cleanly" || ko "reinstall incomplete"
+[[ -f "$TIDE_USERCONFIG" ]] && ok "Tide config re-seeded on reinstall" || ko "Tide config not re-seeded"
+
+echo "  customized Tide config survives uninstall"
+echo '{ "islandWidth": 200 }' >"$TIDE_USERCONFIG"
 
 echo "  uninstall --remove-runtime"
 (cd "$ROOT" && bash uninstall.sh --remove-plugin --remove-runtime) >"$SB/u3.log" 2>&1 \
@@ -165,6 +176,8 @@ done
 [[ ! -f "$HOME/.local/share/applications/tide-island.desktop" \
   && ! -f "$HOME/.local/share/applications/tide-island-config.desktop" ]] \
   && ok "desktop entries removed" || ko "desktop entries remain"
+[[ -f "$TIDE_USERCONFIG" ]] && grep -q 200 "$TIDE_USERCONFIG" \
+  && ok "customized Tide config preserved on uninstall" || ko "customized Tide config deleted"
 
 echo
 echo "cleanroom: $pass passed, $fail failed"

@@ -26,9 +26,13 @@ jq -e . "$ROOT/manifest.json" >/dev/null && t "manifest.json is valid JSON" && o
 jq -e '.id == "mehir.tide-island" and (.kinds | index("service")) != null and (.entryPoints.service | type) == "string"' \
   "$ROOT/manifest.json" >/dev/null && t "manifest carries id/service kind/entrypoint" && ok || ko
 jq -e . "$ROOT/default/tide-island.json" >/dev/null && t "default config is valid JSON" && ok || ko
+jq -e '.islandExclusiveZone == 9 and .islandTopMargin == 1 and .islandBackgroundOpacity == 100
+       and .islandHeight == 36 and .islandWidth == 140' \
+  "$ROOT/default/tide-userconfig.json" >/dev/null && t "default Tide look carries the requested values" && ok || ko
 
 echo "  entry points exist"
-for f in "Service.qml" "default/tide-island.json" "packaging/hyprland-tide-island.lua" \
+for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json" \
+         "packaging/hyprland-tide-island.lua" \
          "install.sh" "uninstall.sh" \
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \

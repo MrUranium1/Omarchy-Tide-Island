@@ -29,4 +29,8 @@ Initial release.
 - Bundles the Tide Island settings GUI (`tide-island-config-app`, built from
   the upstream 1.0.41 source) with its "Tide Island Settings" desktop entry and
   a `~/.local/bin` shim, so the settings app shows up alongside the island.
+- Ship a default island look: on a machine with no Tide config yet, the install
+  seeds `~/.config/tide-island/userconfig.json` once (Reserved Top Space 9, Top
+  Margin 1, Background Transparency 100, island 36x140); existing configs are
+  never overwritten and an untouched seed is removed on uninstall.
 - Clean-room lifecycle test (`tests/cleanroom.sh`).

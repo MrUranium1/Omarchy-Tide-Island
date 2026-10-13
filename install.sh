@@ -6,8 +6,9 @@
 #   * never modifies ~/.config/hypr/bindings.lua on systems that have a
 #     bar/tide binding already (it only wires its own keybinding module when
 #     nothing binds SUPER + SHIFT + SPACE);
-#   * never touches your Tide Island config (~/.config/tide-island/) or the
-#     Tide QML override (~/.local/share/tide-island/);
+#   * seeds ~/.config/tide-island/userconfig.json only when you have no Tide
+#     config yet and never overwrites it; never touches the Tide QML override
+#     (~/.local/share/tide-island/);
 #   * only patches user clones of the OSD/notifications plugins (creating them
 #     first when they don't exist), and backs up every pre-patch file.
 #
@@ -72,6 +73,23 @@ bash "$ROOT/scripts/install-dependencies.sh" || true
 log "ensuring the Tide Island runtime is available..."
 bash "$ROOT/scripts/install-tide-runtime.sh" \
   || log "bundled runtime install failed; install the tide-island package to fall back." >&2
+
+# -------------------------------------------------------- Tide's own config
+
+# Give downloaders the island's default look by seeding Tide's own
+# userconfig.json once — only when the user has no Tide config yet, and never
+# overwritten afterwards. Every key we omit falls back to Tide's compiled
+# defaults, so only these five values are "ours".
+tide_userconfig="$HOME/.config/tide-island/userconfig.json"
+seed_tide_userconfig=0
+if [[ -f $tide_userconfig ]]; then
+  log "Tide user config exists ($tide_userconfig); keeping it and its user's values."
+else
+  mkdir -p "$(dirname "$tide_userconfig")"
+  install -m 0644 "$ROOT/default/tide-userconfig.json" "$tide_userconfig"
+  seed_tide_userconfig=1
+  log "seeded $tide_userconfig with the plugin default look (status/top/opacity/36x140)."
+fi
 
 # -------------------------------------------------------------- CLI shims
 
@@ -201,13 +219,16 @@ jq -n \
   --arg notifCloneBefore "$notif_clone_before" \
   --arg notifCloneAfter "$notif_clone_after" \
   --argjson notifCloneCreated "$notif_clone_created" \
+  --arg tideUserConfigPath "$tide_userconfig" \
+  --argjson tideUserConfigSeeded "$( (( seed_tide_userconfig )) && echo true || echo false )" \
   '{ installer: $installer, installedAt: $installedAt,
      cliShims: $shims, configSeeded: $configSeeded,
      keybinding: { wired: $keyWired, module: $keyModule, hyprlandBackup: $hyprlandBackup },
      suppression: {
        osd: { before: $osdCloneBefore, after: $osdCloneAfter, createdByUs: $osdCloneCreated },
        notifications: { before: $notifCloneBefore, after: $notifCloneAfter, createdByUs: $notifCloneCreated }
-     } }' >"$INSTALLED_FILE" 2>/dev/null || {
+     },
+     tideUserConfig: { path: $tideUserConfigPath, seeded: $tideUserConfigSeeded } }' >"$INSTALLED_FILE" 2>/dev/null || {
       log "could not write $INSTALLED_FILE (missing jq?); continuing." >&2
     }
 log "wrote $INSTALLED_FILE"
