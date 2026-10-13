@@ -124,10 +124,15 @@ scripts/patch-tide-lyrics.sh --restore    # undoes it
 ## Tests
 
 ```sh
-bash tests/unit.sh    # offline: sync state machine, config parity, patch applicability
-bash tests/smoke.sh   # repo self-check incl. shell schema validation
-bash tests/live.sh    # needs a live Omarchy session; toggles bar/Tide and verifies
+bash tests/unit.sh       # offline: sync state machine, config parity, patch applicability
+bash tests/smoke.sh      # repo self-check incl. shell schema validation
+bash tests/cleanroom.sh  # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
+bash tests/live.sh       # needs a live Omarchy session; toggles bar/Tide and verifies
 ```
+
+`tests/cleanroom.sh` fakes `omarchy`, `omarchy-shell` and `systemctl` and runs
+the whole lifecycle inside a disposable `$HOME`, so it is safe to run on a real
+machine without disturbing the session.
 
 ## Licensing
 

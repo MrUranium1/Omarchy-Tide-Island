@@ -159,17 +159,31 @@ bash "$ROOT/scripts/tide-sync.sh" reconcile
 
 # ---------------------------------------------------------- installed.json
 
-osd_clone_created=0
-notif_clone_created=0
-[[ -n $osd_clone_before || -z $osd_clone_after ]] || osd_clone_created=1
-[[ -n $notif_clone_before || -z $notif_clone_after ]] || notif_clone_created=1
+osd_clone_created=false
+notif_clone_created=false
+[[ -z $osd_clone_before && -n $osd_clone_after ]] && osd_clone_created=true
+[[ -z $notif_clone_before && -n $notif_clone_after ]] && notif_clone_created=true
+
+# Preserve "we created this clone" across re-runs: on a second install the clone
+# already exists, so the before/after comparison can no longer tell. Once we
+# created a clone, it stays ours for uninstall.sh --remove-plugin.
+if [[ -f $INSTALLED_FILE ]]; then
+  [[ "$(jq -r '.suppression.osd.createdByUs // false' "$INSTALLED_FILE" 2>/dev/null)" == true ]] && osd_clone_created=true
+  [[ "$(jq -r '.suppression.notifications.createdByUs // false' "$INSTALLED_FILE" 2>/dev/null)" == true ]] && notif_clone_created=true
+  # Keep the earliest "before" we ever saw so uninstall can recognise a clone
+  # that already existed before the very first install.
+  prev_osd_before="$(jq -r '.suppression.osd.before // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+  prev_notif_before="$(jq -r '.suppression.notifications.before // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+  [[ -n $prev_osd_before ]] && osd_clone_before="$prev_osd_before"
+  [[ -n $prev_notif_before ]] && notif_clone_before="$prev_notif_before"
+fi
 
 jq -n \
   --arg installer "$ROOT" \
   --arg installedAt "$TSTAMP" \
   --argjson shims "$(printf '%s\n' "${cli_shims[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
-  --argjson configSeeded "$config_seeded" \
-  --argjson keyWired "$key_wired" \
+  --argjson configSeeded "$( (( config_seeded )) && echo true || echo false )" \
+  --argjson keyWired "$( (( key_wired )) && echo true || echo false )" \
   --arg keyModule "$key_module" \
   --arg hyprlandBackup "$hyprland_backup" \
   --arg osdCloneBefore "$osd_clone_before" \

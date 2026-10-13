@@ -79,7 +79,7 @@ if (( flag_remove_plugin )); then
     before="$(jq -r --arg r "$role" ".suppression.$role.before // empty" <<<"$state" || true)"
     after="$(jq -r --arg r "$role" ".suppression.$role.after // empty" <<<"$state" || true)"
     created="$(jq -r --arg r "$role" ".suppression.$role.createdByUs // false" <<<"$state" || true)"
-    if [[ $created == "true" && -n $after ]]; then
+    if [[ ( $created == "true" || $created == "1" ) && -n $after ]]; then
       # Remove clones we created (they no longer carry our patch).
       omarchy plugin remove "$after" --yes 2>/dev/null \
         && log "removed clone '$after' (was created by install.sh)." \

@@ -32,7 +32,7 @@ fi
 
 echo
 echo "3/3 CLI shims, config seed, keybinding + first reconcile"
-bash "$ROOT/install.sh" -y || {
+bash "$ROOT/install.sh" || {
   printf '\ninstall.sh failed; fix the reported issue and re-run setup.\n' >&2
   exit 1
 }
