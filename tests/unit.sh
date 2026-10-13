@@ -189,6 +189,13 @@ t "installs the launcher and backend into the prefix"
 [[ -x "$ir_prefix/bin/tide-island" && -f "$ir_prefix/lib/libIslandBackend.so" ]] && ok || ko
 t "installs the QML tree"
 [[ -f "$ir_prefix/share/tide-island/shell.qml" ]] && ok || ko
+t "installs the settings GUI into the prefix"
+[[ -x "$ir_prefix/bin/tide-island-config-app" ]] && ok || ko
+t "links the config app onto PATH"
+[[ -L "$ir/home/.local/bin/tide-island-config-app" ]] && ok || ko
+t "installs both desktop entries"
+[[ -f "$ir/home/.local/share/applications/tide-island.desktop" \
+  && -f "$ir/home/.local/share/applications/tide-island-config.desktop" ]] && ok || ko
 t "writes a user unit carrying our marker"
 grep -q 'managed by mehir.tide-island' "$ir/home/.config/systemd/user/tide-island.service" && ok || ko
 t "links tide-island onto PATH"

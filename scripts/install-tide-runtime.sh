@@ -40,9 +40,13 @@ VERSION="$(cat "$VENDOR/VERSION" 2>/dev/null || echo unknown)"
 already_on_path=0
 if [[ ${TIDE_ISLAND_FORCE_BUNDLE:-0} == 1 ]]; then
   already_on_path=0
-elif command -v tide-island >/dev/null 2>&1 \
-  && [[ "$(command -v tide-island)" != "$PREFIX/bin/tide-island" ]]; then
-  already_on_path=1
+else
+  found="$(command -v tide-island 2>/dev/null || true)"
+  # 'command -v' may report our own ~/.local/bin link; resolve it and compare
+  # real paths so a system install is the only thing that counts.
+  if [[ -n $found && "$(readlink -f -- "$found")" != "$PREFIX/bin/tide-island" ]]; then
+    already_on_path=1
+  fi
 fi
 
 # ------------------------------------------------------------- copy the tree
@@ -51,14 +55,15 @@ if (( already_on_path )); then
   log "a tide-island is already on PATH ('$(command -v tide-island)'); leaving it alone."
 else
   if [[ "$(cat "$VERSION_FILE" 2>/dev/null || true)" == "$VERSION" ]] \
-    && [[ -x "$PREFIX/bin/tide-island" ]]; then
+    && [[ -x "$PREFIX/bin/tide-island" ]] \
+    && [[ -x "$PREFIX/bin/tide-island-config-app" ]]; then
     log "bundled Tide Island $VERSION already installed at $PREFIX."
   else
     log "installing bundled Tide Island $VERSION -> $PREFIX"
     rm -rf "${PREFIX:?}/bin" "${PREFIX:?}/lib" "${PREFIX:?}/share"
     mkdir -p "$PREFIX"
     cp -a "$VENDOR/bin" "$VENDOR/lib" "$VENDOR/share" "$PREFIX/"
-    chmod 0755 "$PREFIX/bin/tide-island"
+    chmod 0755 "$PREFIX/bin/tide-island" "$PREFIX/bin/tide-island-config-app"
     [[ -d "$PREFIX/share/tide-island/bin" ]] \
       && chmod 0755 "$PREFIX/share/tide-island/bin/"* 2>/dev/null || true
     printf '%s\n' "$VERSION" >"$VERSION_FILE"
@@ -102,13 +107,15 @@ fi
 
 if (( ! already_on_path )); then
   mkdir -p "$BIN_DIR"
-  target="$BIN_DIR/tide-island"
-  if [[ -e $target && ! -L $target ]]; then
-    log "keeping pre-existing $target (not a symlink)."
-  else
-    ln -sf "$PREFIX/bin/tide-island" "$target"
-    log "linked $target -> $PREFIX/bin/tide-island"
-  fi
+  for name in tide-island tide-island-config-app; do
+    target="$BIN_DIR/$name"
+    if [[ -e $target && ! -L $target ]]; then
+      log "keeping pre-existing $target (not a symlink)."
+    else
+      ln -sf "$PREFIX/bin/$name" "$target"
+      log "linked $target -> $PREFIX/bin/$name"
+    fi
+  done
 fi
 
 # --------------------------------------------------------------- desktop entry
@@ -117,6 +124,11 @@ if [[ -f "$VENDOR/share/applications/tide-island.desktop" ]]; then
   mkdir -p "$APPS_DIR"
   install -m 0644 "$VENDOR/share/applications/tide-island.desktop" \
     "$APPS_DIR/tide-island.desktop"
+fi
+if [[ -f "$VENDOR/share/applications/tide-island-config.desktop" ]]; then
+  mkdir -p "$APPS_DIR"
+  install -m 0644 "$VENDOR/share/applications/tide-island-config.desktop" \
+    "$APPS_DIR/tide-island-config.desktop"
 fi
 
 log "done (prefix=$PREFIX, version=$VERSION)."

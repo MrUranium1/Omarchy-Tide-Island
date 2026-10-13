@@ -12,19 +12,18 @@ package. It is third-party software, **not** part of this plugin's own MIT code.
 
 ```
 bin/tide-island                     launcher script (verbatim from the package)
+bin/tide-island-config-app          settings GUI (compiled from upstream source)
 lib/libIslandBackend.so             compiled backend shared library
-lib/qt6/qml/TideIsland/             QML module (qmldir + libTideIslandplugin.so)
+lib/qt6/qml/TideIsland/             QML module (incl. the config-app QML)
 lib/qt6/qml/IslandBackend/          QML module (qmldir + plugin)
 share/tide-island/                  QML tree, lyrics backend (bin/lyricsmpris),
                                     and helper scripts
 share/applications/tide-island.desktop
+share/applications/tide-island-config.desktop
 ```
 
 ## What is intentionally not bundled
 
-- `bin/tide-island-config-app` (the ~6.6 MB settings GUI) and its desktop entry.
-  The island runs without it; Hyprland never invokes it. Users who want the
-  settings GUI can install the upstream `tide-island` package.
 - `bin/tide-island-spotify-setup` (optional Spicetify bridge helper).
 
 ## Corresponding source
@@ -32,3 +31,11 @@ share/applications/tide-island.desktop
 The bundled files are unmodified copies of the upstream 1.0.41 build. Their
 corresponding source is the upstream repository above; no source changes were
 made by this project. See the GPL-3.0-only text for the license terms.
+
+The one exception is `bin/tide-island-config-app`, which is compiled from the
+upstream 1.0.41 source tarball (`Tide-island-app/`, the upstream CMake build,
+`-DCMAKE_INSTALL_PREFIX=/usr`, release build, no patches) rather than copied
+from a binary package. Its own QML is embedded in the binary as Qt resources;
+`share/applications/tide-island-config.desktop` differs from upstream only in
+that `Exec=tide-island-config-app` resolves via `PATH` instead of a hardcoded
+`/usr/bin/` prefix, so the same entry works for the bundled prefix.

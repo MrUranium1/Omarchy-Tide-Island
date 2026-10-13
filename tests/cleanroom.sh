@@ -106,12 +106,15 @@ echo "  fresh install"
 [[ -x "$HOME/.local/bin/omarchy-tide-island-toggle" && -x "$HOME/.local/bin/omarchy-tide-island-status" ]] && ok "CLI shims installed" || ko "CLI shims missing"
 PREFIX="$HOME/.local/share/omarchy-tide-island"
 [[ -x "$PREFIX/bin/tide-island" ]] && ok "bundled Tide Island runtime installed" || ko "bundled runtime missing"
+[[ -x "$PREFIX/bin/tide-island-config-app" ]] && ok "settings GUI bundled" || ko "settings GUI missing"
 [[ -f "$PREFIX/lib/libIslandBackend.so" ]] && ok "compiled backend vendored" || ko "backend lib missing"
 [[ -L "$HOME/.local/bin/tide-island" ]] && ok "tide-island linked onto PATH" || ko "no PATH link"
+[[ -L "$HOME/.local/bin/tide-island-config-app" ]] && ok "config app linked onto PATH" || ko "no config app PATH link"
 [[ -f "$HOME/.config/systemd/user/tide-island.service" ]] \
   && grep -q 'managed by mehir.tide-island' "$HOME/.config/systemd/user/tide-island.service" \
   && ok "user service unit written" || ko "service unit missing"
 [[ -f "$HOME/.local/share/applications/tide-island.desktop" ]] && ok "desktop entry installed" || ko "desktop entry missing"
+[[ -f "$HOME/.local/share/applications/tide-island-config.desktop" ]] && ok "settings desktop entry installed" || ko "settings desktop entry missing"
 [[ -f "$CONFIG" ]] && ok "config seeded" || ko "config not seeded"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "osd clone patched" || ko "osd clone not patched"
 grep -q 'popupsSuppressed' "$PLUGINS/mehir.notifications/Service.qml" 2>/dev/null && ok "notifications clone patched" || ko "notifications clone not patched"
@@ -156,7 +159,12 @@ echo "  uninstall --remove-runtime"
   && ok "uninstall --remove-runtime exits 0" || { ko "failed"; tail -n20 "$SB/u3.log"; }
 [[ ! -e "$PREFIX" ]] && ok "bundled runtime removed" || ko "runtime not removed"
 [[ ! -e "$HOME/.config/systemd/user/tide-island.service" ]] && ok "service unit removed" || ko "unit not removed"
-[[ ! -e "$HOME/.local/bin/tide-island" ]] && ok "PATH link removed" || ko "PATH link not removed"
+for name in tide-island tide-island-config-app; do
+  [[ ! -e "$HOME/.local/bin/$name" ]] && ok "$name PATH link removed" || ko "$name PATH link not removed"
+done
+[[ ! -f "$HOME/.local/share/applications/tide-island.desktop" \
+  && ! -f "$HOME/.local/share/applications/tide-island-config.desktop" ]] \
+  && ok "desktop entries removed" || ko "desktop entries remain"
 
 echo
 echo "cleanroom: $pass passed, $fail failed"

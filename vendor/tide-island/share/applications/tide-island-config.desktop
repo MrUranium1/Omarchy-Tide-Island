@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Tide Island Settings
+Comment=Configure Tide Island
+Exec=tide-island-config-app
+Icon=preferences-system
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;
+Keywords=tide;island;hyprland;niri;settings;configuration;

@@ -56,8 +56,10 @@ The first time the plugin loads it notices it is not set up yet and runs the
 whole setup by itself: it installs the bundled Tide Island into
 `~/.local/share/omarchy-tide-island` (no sudo), links `~/.local/bin/tide-island`,
 installs the user `tide-island.service`, adds the CLI shims, seeds the config,
-creates + patches the OSD/notification clones and wires the keybinding. Then the
-island appears whenever the bar is hidden.
+creates + patches the OSD/notification clones and wires the keybinding. The
+Tide Island **Settings** app is bundled too — open it from the app menu
+("Tide Island Settings") or run `tide-island-config-app`. Then the island
+appears whenever the bar is hidden.
 
 ### Manual install
 
@@ -133,7 +135,9 @@ scripts/patch-tide-lyrics.sh --restore    # undoes it
 
 ## What this never touches
 
-- `~/.config/tide-island/` (your Tide Island settings) — never.
+- `~/.config/tide-island/` (your Tide Island settings) — never written by the
+  plugin. It is only created by the bundled Settings app when you change a
+  setting.
 - Your Tide QML override / `~/.local/share/tide-island/` — never. The bundled
   runtime is installed to a separate prefix (`~/.local/share/omarchy-tide-island`)
   so it cannot collide with an override you already have.

@@ -146,12 +146,15 @@ if (( flag_remove_runtime )); then
     "$SYSTEMCTL" --user daemon-reload 2>/dev/null || true
     log "removed $unit"
   fi
-  link="$HOME/.local/bin/tide-island"
-  if [[ -L $link && "$(readlink "$link")" == "$PREFIX/bin/tide-island" ]]; then
-    rm -f "$link"
-    log "removed $link"
-  fi
-  rm -f "$HOME/.local/share/applications/tide-island.desktop"
+  for name in tide-island tide-island-config-app; do
+    link="$HOME/.local/bin/$name"
+    if [[ -L $link && "$(readlink "$link")" == "$PREFIX/bin/$name" ]]; then
+      rm -f "$link"
+      log "removed $link"
+    fi
+  done
+  rm -f "$HOME/.local/share/applications/tide-island.desktop" \
+    "$HOME/.local/share/applications/tide-island-config.desktop"
   if [[ -f "$PREFIX/.version" ]]; then
     rm -rf "${PREFIX:?}"
     log "removed bundled runtime $PREFIX"

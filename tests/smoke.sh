@@ -40,16 +40,24 @@ done
 
 echo "  vendored Tide Island runtime"
 for f in "vendor/tide-island/VERSION" "vendor/tide-island/PROVENANCE.md" \
-         "vendor/tide-island/bin/tide-island" "vendor/tide-island/lib/libIslandBackend.so" \
+         "vendor/tide-island/bin/tide-island" \
+         "vendor/tide-island/bin/tide-island-config-app" \
+         "vendor/tide-island/lib/libIslandBackend.so" \
          "vendor/tide-island/lib/qt6/qml/TideIsland/qmldir" \
          "vendor/tide-island/lib/qt6/qml/IslandBackend/qmldir" \
          "vendor/tide-island/share/tide-island/shell.qml" \
          "vendor/tide-island/share/applications/tide-island.desktop" \
+         "vendor/tide-island/share/applications/tide-island-config.desktop" \
          "LICENSES/GPL-3.0-only.txt"; do
   [[ -f $ROOT/$f ]] && ok || { t "missing $f" && ko; }
 done
 bash -n "$ROOT/vendor/tide-island/bin/tide-island" \
   && t "vendored launcher parses" && ok || ko
+[[ -x "$ROOT/vendor/tide-island/bin/tide-island-config-app" ]] \
+  && t "config app is executable" && ok || ko
+! grep -q 'Exec=/usr' "$ROOT/vendor/tide-island/share/applications/tide-island.desktop" \
+    "$ROOT/vendor/tide-island/share/applications/tide-island-config.desktop" \
+  && t "desktop entries resolve via PATH (no /usr Exec)" && ok || ko
 grep -q 'GNU GENERAL PUBLIC LICENSE' "$ROOT/LICENSES/GPL-3.0-only.txt" \
   && t "GPL-3.0 text present" && ok || ko
 

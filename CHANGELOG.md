@@ -26,4 +26,7 @@ Initial release.
   --auto`): adding the plugin installs the runtime, shims and suppression once.
 - `scripts/install-tide-runtime.sh` (relocatable prefix, user systemd unit,
   PATH shim) and OSD/notification suppression.
+- Bundles the Tide Island settings GUI (`tide-island-config-app`, built from
+  the upstream 1.0.41 source) with its "Tide Island Settings" desktop entry and
+  a `~/.local/bin` shim, so the settings app shows up alongside the island.
 - Clean-room lifecycle test (`tests/cleanroom.sh`).
