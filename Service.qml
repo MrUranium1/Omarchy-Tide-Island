@@ -32,6 +32,12 @@ Item {
         Qt.resolvedUrl("scripts/plugin-setup.sh").toString().replace("file://", "")
     readonly property string launchTerminal:
         (omarchyPath !== "" ? omarchyPath : "/usr/share/omarchy") + "/bin/omarchy-launch-terminal"
+    readonly property string pluginDir:
+        home + "/.config/omarchy/plugins/mehir.tide-island"
+    // Self-contained teardown installed outside the plugin dir (install.sh), so
+    // it survives the plugin being deleted.
+    readonly property string teardownHelper:
+        home + "/.local/lib/omarchy-tide-island/teardown.sh"
 
     // ---------------------------------------------------------------- config
 
@@ -374,5 +380,18 @@ Item {
         plugin.probeBar()
         plugin.scheduleReconcile()
         autoSetupDelay.start()
+    }
+
+    // If this plugin is *removed* (e.g. `omarchy plugin remove`, which deletes
+    // the directory without running any hook) the shell destroys this service.
+    // The directory is deleted just after that, so wait a moment and, only if
+    // it really is gone, undo the OSD/notification stand-down and everything
+    // else we installed. A hot-reload or a plain disable leaves the directory
+    // in place, so the guard makes this a no-op then.
+    Component.onDestruction: {
+        Quickshell.execDetached([
+            "bash", "-c",
+            "sleep 3; bash \"$1\" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final",
+            "--", plugin.teardownHelper])
     }
 }

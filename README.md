@@ -63,6 +63,9 @@ appears whenever the bar is hidden. On a machine with no Tide config yet, it
 also seeds Tide's own `~/.config/tide-island/userconfig.json` once with the
 default island look below (existing configs are never overwritten).
 
+Removal is equally automatic: removing the plugin (e.g. `omarchy plugin remove
+mehir.tide-island`) undoes the whole setup by itself — see [Removal](#removal).
+
 ### Manual install
 
 ```sh
@@ -98,6 +101,27 @@ Repeat `install.sh` to repair; `uninstall.sh` reverses it (nothing user-created
 is ever deleted, just backed up, and a stand-down you had before the plugin is
 left in place). Pass `--remove-runtime` to also remove the bundled Tide Island
 from `~/.local`.
+
+## Removal
+
+Two ways, both undo the OSD/notification stand-down (so the volume/display OSD
+and notification popups go back to normal instead of disappearing into the
+island):
+
+1. **`omarchy plugin remove mehir.tide-island`** — enough on its own. The
+   plugin notices its directory is gone and runs the self-contained teardown
+   installed at `~/.local/lib/omarchy-tide-island/teardown.sh`, which removes
+   the suppression clones it created, the CLI shims, the keybinding, the
+   bundled runtime and the recorded state. (`scripts/teardown.sh` is installed
+   *outside* the plugin directory precisely so it survives the plugin being
+   deleted.)
+2. **`bash uninstall.sh --remove-plugin --remove-runtime`** — from a checkout;
+   logs what it backs up before removing. Add `--purge-config` to also delete
+   the plugin config. A shutdown stand-down you already had *before* this
+   plugin is detected and left untouched in both cases.
+
+A `~/.config/tide-island/userconfig.json` you customized is always kept; only
+a config the plugin seeded (and that you never touched) is reclaimed.
 
 ## Configuration
 

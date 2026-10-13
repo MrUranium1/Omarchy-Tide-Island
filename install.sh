@@ -184,6 +184,17 @@ fi
 log "reconciling service state against the bar flag..."
 bash "$ROOT/scripts/tide-sync.sh" reconcile
 
+# ------------------------------------------------------- teardown helper
+
+# Install the self-contained teardown outside the plugin directory so the plugin
+# can undo itself when it is removed with `omarchy plugin remove` (which deletes
+# the plugin dir without running any hook). Keep a copy of the seeded Tide
+# userconfig next to the state so uninstall knows what it may reclaim.
+mkdir -p "$HOME/.local/lib/omarchy-tide-island"
+install -m 0755 "$ROOT/scripts/teardown.sh" "$HOME/.local/lib/omarchy-tide-island/teardown.sh"
+install -m 0644 "$ROOT/default/tide-userconfig.json" "$STATE_DIR/seeded-userconfig.json"
+log "installed removal helper at \$HOME/.local/lib/omarchy-tide-island/teardown.sh"
+
 # ---------------------------------------------------------- installed.json
 
 osd_clone_created=false

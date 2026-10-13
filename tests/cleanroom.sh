@@ -179,6 +179,32 @@ done
 [[ -f "$TIDE_USERCONFIG" ]] && grep -q 200 "$TIDE_USERCONFIG" \
   && ok "customized Tide config preserved on uninstall" || ko "customized Tide config deleted"
 
+echo "  automatic reap when the plugin is removed via 'omarchy plugin remove'"
+(cd "$ROOT" && bash install.sh) >"$SB/i4.log" 2>&1 && ok "reinstall before reap exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i4.log"; }
+HELPER="$HOME/.local/lib/omarchy-tide-island/teardown.sh"
+[[ -f $HELPER ]] && ok "teardown helper installed outside the plugin dir" || ko "teardown helper missing"
+mkdir -p "$PLUGINS/mehir.tide-island"
+bash "$HELPER" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap-guard.log" 2>&1
+[[ -d "$PLUGINS/mehir.tide-island" ]] && ok "guard: plugin untouched while installed" || ko "guard removed the installed plugin"
+[[ -d "$PLUGINS/mehir.osd" ]] && ok "guard: suppression clones untouched while installed" || ko "guard removed suppression clones"
+[[ -d "$STATE" ]] && ok "guard: state untouched while installed" || ko "guard wiped state while installed"
+omarchy plugin remove mehir.tide-island --yes >/dev/null 2>&1
+[[ ! -d "$PLUGINS/mehir.tide-island" ]] && ok "plugin removed via omarchy" || ko "plugin not removed"
+bash "$HELPER" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap.log" 2>&1 \
+  && ok "reap exits 0" || { ko "reap failed"; tail -n20 "$SB/reap.log"; }
+[[ ! -e "$PLUGINS/mehir.osd" && ! -e "$PLUGINS/mehir.notifications" ]] \
+  && ok "suppression clones removed by reap" || ko "suppression clones remain after reap"
+grep -rq 'The bar-off marker' "$PLUGINS" 2>/dev/null \
+  && ko "OSD suppression still active after reap" || ok "OSD suppression undone by reap"
+grep -rq 'popupsSuppressed' "$PLUGINS" 2>/dev/null \
+  && ko "notification suppression still active after reap" || ok "notification suppression undone by reap"
+[[ ! -e "$CONFIG" ]] && ok "config purged by reap" || ko "config remains after reap"
+[[ ! -e "$PREFIX" ]] && ok "runtime removed by reap" || ko "runtime remains after reap"
+[[ ! -e "$STATE" ]] && ok "state removed by reap" || ko "state remains after reap"
+[[ ! -e "$HOME/.local/lib/omarchy-tide-island" ]] && ok "teardown helper cleaned up" || ko "helper remains"
+[[ -f "$TIDE_USERCONFIG" ]] && grep -q 200 "$TIDE_USERCONFIG" \
+  && ok "customized Tide config survives the reap too" || ko "reap deleted a customized Tide config"
+
 echo
 echo "cleanroom: $pass passed, $fail failed"
 (( fail == 0 ))

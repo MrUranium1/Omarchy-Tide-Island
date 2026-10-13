@@ -33,4 +33,11 @@ Initial release.
   seeds `~/.config/tide-island/userconfig.json` once (Reserved Top Space 9, Top
   Margin 1, Background Transparency 100, island 36x140); existing configs are
   never overwritten and an untouched seed is removed on uninstall.
+- Removal now undoes itself however the plugin is removed: install notes a
+  self-contained teardown outside the plugin dir, and removing `mehir.tide-island`
+  (even via `omarchy plugin remove`, which has no uninstall hook) restores the
+  OSD/notification stand-down — volume/display popups and notifications return
+  to the normal bar path — and removes shims, keybinding and bundled runtime.
+  `uninstall.sh` is now a thin wrapper over `scripts/teardown.sh` (backups and
+  the pre-existing-stand-down rule are unchanged).
 - Clean-room lifecycle test (`tests/cleanroom.sh`).

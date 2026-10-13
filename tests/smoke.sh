@@ -36,6 +36,7 @@ for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json"
          "install.sh" "uninstall.sh" \
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
+         "scripts/teardown.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
