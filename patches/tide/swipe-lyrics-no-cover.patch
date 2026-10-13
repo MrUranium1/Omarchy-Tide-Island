@@ -1,0 +1,78 @@
+--- a/qml/island/SwipeLyricsLayer.qml
++++ b/qml/island/SwipeLyricsLayer.qml
+@@ -23,8 +23,6 @@
+     property real minimumWidth: 220
+     property real maximumWidth: minimumWidth
+     property real horizontalPadding: 14
+-    property real coverSize: 24
+-    property real coverRadius: 7
+     property real visualSpacing: 35
+     property real hiddenLeftPadding: 18
+     property real hiddenRightPadding: 16
+@@ -38,7 +36,7 @@
+     readonly property real textWidth: Math.max(0, width - horizontalPadding * 2)
+     readonly property real lyricTextWidth: Math.max(
+         0,
+-        textWidth - coverSize - cavaBars.implicitWidth - visualSpacing * 2
++        textWidth - (cavaBars.implicitWidth + visualSpacing) * 2
+     )
+     readonly property real centeredX: horizontalPadding
+     readonly property real lyricHiddenLeftX: -textWidth - hiddenLeftPadding
+@@ -62,8 +60,7 @@
+             Math.max(minimumWidth, maximumWidth),
+             lyricMetrics.advanceWidth
+                 + horizontalPadding * 2
+-                + coverSize
+-                + cavaBars.implicitWidth
++                + cavaBars.implicitWidth * 2
+                 + visualSpacing * 2
+         )
+     )
+@@ -177,45 +174,11 @@
+         height: parent.height
+         opacity: root.clampedProgress
+
+-        Rectangle {
+-            id: coverFrame
+-
+-            anchors.left: parent.left
+-            anchors.verticalCenter: parent.verticalCenter
+-            width: root.coverSize
+-            height: root.coverSize
+-            radius: root.coverRadius
+-            color: "#2c2c2e"
+-            antialiasing: true
+-
+-            Rectangle {
+-                id: coverMask
+-
+-                anchors.fill: parent
+-                radius: root.coverRadius
+-                antialiasing: true
+-                visible: false
+-                layer.enabled: true
+-            }
+-
+-            Image {
+-                anchors.fill: parent
+-                source: root.currentArtUrl
+-                fillMode: Image.PreserveAspectCrop
+-                visible: source.toString() !== ""
+-                sourceSize: Qt.size(root.coverSize * 2, root.coverSize * 2)
+-                layer.enabled: true
+-                layer.effect: OpacityMask {
+-                    maskSource: coverMask
+-                }
+-            }
+-        }
+-
+         Item {
+             id: lyricViewport
+
+-            anchors.left: coverFrame.right
+-            anchors.leftMargin: root.visualSpacing
++            anchors.left: parent.left
++            anchors.leftMargin: cavaBars.implicitWidth + root.visualSpacing
+             anchors.right: cavaBars.left
+             anchors.rightMargin: root.visualSpacing
+             height: parent.height

@@ -1,0 +1,57 @@
+--- a/Service.qml
++++ b/Service.qml
+@@ -852,11 +852,46 @@
+     })
+   }
+
++  // ------------------------------------------------- popup suppression
++
++  // The bar-off marker (written by the bar/tide toggle) means Tide Island owns
++  // the on-screen notification UI, so the Omarchy toast stack stands down while
++  // it is present. Suppression is UI-only: the daemon still owns
++  // org.freedesktop.Notifications and history keeps recording every
++  // notification through the normal paths, so nothing is lost.
++  property bool popupsSuppressed: false
++
++  // Drop whatever is on screen the moment suppression turns on. Anything that
++  // arrives afterwards is hidden by the popup window's `visible` binding and
++  // archived to history by its own expiry timer as usual.
++  onPopupsSuppressedChanged: if (popupsSuppressed) service.clearPopups()
++
++  // Presence of the bar-off flag = Tide Island on. Watching the parent toggles
++  // directory because FileView can't observe a file that doesn't exist yet.
++  Process {
++    id: suppressionProbe
++    running: true
++    command: ["bash", "-c", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]
++    stdout: SplitParser { onRead: function(line) { service.popupsSuppressed = String(line).trim() === "yes" } }
++  }
++  FileView {
++    path: service.home + "/.local/state/omarchy/toggles"
++    watchChanges: true
++    printErrors: false
++    onFileChanged: suppressionProbe.running = true
++  }
++
+   // ---------------------------------------------------- IPC
+
+   IpcHandler {
+     target: "notifications"
+
++    // Re-read the bar-off flag. The directory watch can go quiet after rapid
++    // flag changes, so the toggle nudges this to stay in sync.
++    function syncSuppression(): void {
++      suppressionProbe.running = true
++    }
++
+     function dndState(): string {
+       return service.doNotDisturb ? "on" : "off"
+     }
+@@ -956,7 +991,7 @@
+       id: popupWindow
+       required property var modelData
+       screen: modelData
+-      visible: popupModel.count > 0
++      visible: popupModel.count > 0 && !service.popupsSuppressed
+
+       WlrLayershell.namespace: "omarchy-notifications"

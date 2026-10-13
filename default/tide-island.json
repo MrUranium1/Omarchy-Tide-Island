@@ -1,0 +1,10 @@
+{
+  "coordinateWithBar": true,
+  "startWithBarHidden": true,
+  "stopWithBarShown": true,
+  "suppressOsd": true,
+  "suppressNotifications": true,
+  "serviceName": "tide-island.service",
+  "togglesDir": "~/.local/state/omarchy/toggles",
+  "barOffFile": "bar-off"
+}

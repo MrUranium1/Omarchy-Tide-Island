@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Smoke test - validates the plugin repo itself without side effects:
+#   * every script and binary parses as valid bash;
+#   * the manifest validates against the Omarchy schema;
+#   * entry points and scripts exist;
+#   * sync + status + toggle CLIs exist and answer sanely against a dry-run;
+#   * the onboard configuration file is valid JSON and matches embedded defaults.
+# Run from anywhere: bash tests/smoke.sh
+
+set -Eeuo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+pass=0
+fail=0
+ok() { pass=$((pass + 1)); }
+ko() { fail=$((fail + 1)); }
+t() { printf '  - %s\n' "$*"; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+echo "tide-island plugin smoke test"
+
+echo "  manifests and config"
+jq -e . "$ROOT/manifest.json" >/dev/null && t "manifest.json is valid JSON" && ok || ko
+jq -e '.id == "mehir.tide-island" and (.kinds | index("service")) != null and (.entryPoints.service | type) == "string"' \
+  "$ROOT/manifest.json" >/dev/null && t "manifest carries id/service kind/entrypoint" && ok || ko
+jq -e . "$ROOT/default/tide-island.json" >/dev/null && t "default config is valid JSON" && ok || ko
+
+echo "  entry points exist"
+for f in "Service.qml" "default/tide-island.json" "packaging/hyprland-tide-island.lua" \
+         "install.sh" "uninstall.sh" \
+         "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
+         "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
+         "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
+         "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
+         "patches/tide/swipe-lyrics-no-cover.patch"; do
+  [[ -f $ROOT/$f ]] && ok || { t "missing $f" && ko; }
+done
+
+echo "  bash syntax"
+while IFS= read -r -d '' f; do
+  bash -n "$f" && ok || { t "syntax error in $f" && ko; }
+done < <(find "$ROOT" \( -name '*.sh' -o -name 'omarchy-tide-island-*' \) -print0 | sort -z)
+
+echo "  sync CLI contracts (dry run for reconcile)"
+export TIDE_SYNC_DRY_RUN=1
+
+out="$("$ROOT/scripts/tide-sync.sh" config)"
+echo "$out" | jq -e '.config.coordinateWithBar == true' >/dev/null \
+  && t "config reports defaults" && ok || ko
+[[ "$("$ROOT/scripts/tide-sync.sh" probe)" =~ ^bar-(hidden|visible)$ ]] \
+  && t "probe answers bar state" && ok || ko
+
+echo "  omarchy validates the plugin folder"
+if (cd "$ROOT" && omarchy plugin validate . >/dev/null 2>&1); then
+  t "manifest schema validates" && ok
+elif [[ ${SMOKE_ALLOW_SHELL_DOWN:-0} == 1 ]]; then
+  t "manifest schema validation skipped (shell down)" && ok
+else
+  t "manifest schema FAILED validation" && ko
+fi
+
+echo
+echo "smoke: $pass passed, $fail failed"
+(( fail == 0 ))

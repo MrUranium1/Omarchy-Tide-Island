@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# omarchy-tide-island-toggle
+#
+# Toggles the bar + Tide Island pair. This is the command the
+# SUPER + SHIFT + SPACE binding runs.
+#
+# Behavior:
+#   1. Ask the shells's Tide Island service to flip the bar-off flag. The
+#      service owns reconciliation (flag -> tide-island.service state) and
+#      rocks the OSD/notifications along.
+#   2. If the shell is down (or the plugin isn't enabled) do it ourselves:
+#      flip the flag file and run scripts/tide-sync.sh reconcile directly.
+#   3. Best-effort nudges so the bar, the OSD and the notification stack
+#      re-read the flag even after a rapid second toggle.
+#
+# Every step is idempotent: this is safe to bind, re-bind and run twice.
+
+set -Eeuo pipefail
+
+PLUGIN_ID="mehir.tide-island"
+PLUGIN_DIR="${TIDE_ISLAND_PLUGIN_DIR:-$HOME/.config/omarchy/plugins/$PLUGIN_ID}"
+SYNC_SCRIPT="$PLUGIN_DIR/scripts/tide-sync.sh"
+FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
+
+nudge() {
+  omarchy-shell -q omarchy.bar syncHidden 2>/dev/null || true
+  omarchy-shell -q osd syncSuppression 2>/dev/null || true
+  omarchy-shell -q notifications syncSuppression 2>/dev/null || true
+}
+
+flip_flag_local() {
+  mkdir -p "$HOME/.local/state/omarchy/toggles"
+  if [[ -f "$FLAG" ]]; then
+    rm -f "$FLAG"
+  else
+    touch "$FLAG"
+  fi
+  if [[ -x "$SYNC_SCRIPT" ]]; then
+    bash "$SYNC_SCRIPT" reconcile || true
+  fi
+}
+
+# 1) Ask the shell service. "ok" is the contract of `IpcHandler.toggle()`.
+out="$(omarchy-shell "$PLUGIN_ID" toggle 2>/dev/null || true)"
+case "$out" in
+  *ok*) ;;
+  *)
+    # 2) Shell down / plugin disabled. Fall back to direct, identical logic.
+    flip_flag_local
+    ;;
+esac
+
+# 3) Rapid-toggle safety net.
+nudge

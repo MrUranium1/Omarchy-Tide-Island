@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# omarchy-tide-island-status
+#
+# Human-readable status of the Tide Island <-> bar coordination. Uses the
+# shell service when it is up (single IPC round-trip), otherwise falls back to
+# direct probes so it keeps working from a bare TTY.
+
+set -Eeuo pipefail
+
+PLUGIN_ID="mehir.tide-island"
+FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
+
+if out="$(omarchy-shell "$PLUGIN_ID" status 2>/dev/null || true)" && [[ "$out" == *'"plugin": "mehir.tide-island"'* ]]; then
+  # Pretty-print the service's JSON status.
+  python3 - "$out" <<'PY'
+import json, sys
+s = json.loads(sys.argv[1])
+def yn(v): return "yes" if v else "no"
+rows = [
+    ("plugin", s.get("plugin")),
+    ("setup", "needs setup" if s.get("needsSetup") else "ready"),
+    ("bar hidden", yn(s.get("barHidden"))),
+    ("tide installed", yn(s.get("tideInstalled"))),
+    ("tide-island.service", s.get("tideActive")),
+    ("CLI shim installed", yn(s.get("cliInstalled"))),
+    ("OSD stands down", yn(s.get("osdSuppression"))),
+    ("notifications stand down", yn(s.get("notificationsSuppression"))),
+    ("coordinate with bar", yn(s.get("coordinateWithBar"))),
+    ("start when bar hidden", yn(s.get("startWithBarHidden"))),
+    ("stop when bar shown", yn(s.get("stopWithBarShown"))),
+    ("suppress OSD", yn(s.get("suppressOsd"))),
+    ("suppress notifications", yn(s.get("suppressNotifications"))),
+    ("service", s.get("serviceName")),
+    ("config", ("ok" if s.get("configOk") else "ERROR: " + s.get("configError", ""))),
+    ("config file", s.get("configPath")),
+]
+for k, v in rows:
+    print(f"  {k:<24} {v}")
+PY
+  exit 0
+fi
+
+# Shell is down or plugin disabled — direct probes.
+own="  bar hidden          "
+[[ -f "$FLAG" ]] && echo "${own}yes" || echo "${own}no"
+printf '  tide-island.service '
+if command -v tide-island >/dev/null 2>&1; then
+  printf '%s\n' "$(systemctl --user is-active tide-island.service 2>/dev/null || echo unknown)"
+else
+  echo "not installed"
+fi
+printf '  CLI shim installed   '
+command -v omarchy-tide-island-toggle >/dev/null 2>&1 && echo yes || echo no
+echo "  note: omarchy shell is not reachable (no IPC status available)"
