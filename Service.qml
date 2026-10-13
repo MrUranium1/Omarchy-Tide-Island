@@ -35,7 +35,7 @@ Item {
 
     // Effective settings = shipped defaults overridden by the user file.
     // These must match default/tide-island.json; tests/unit.sh asserts parity.
-    readonly property var defaults: {
+    readonly property var defaults: ({
         coordinateWithBar: true,
         startWithBarHidden: true,
         stopWithBarShown: true,
@@ -44,7 +44,7 @@ Item {
         serviceName: "tide-island.service",
         togglesDir: home + "/.local/state/omarchy/toggles",
         barOffFile: "bar-off"
-    }
+    })
 
     property var config: ({})
     property bool configOk: true
