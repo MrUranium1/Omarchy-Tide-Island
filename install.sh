@@ -122,12 +122,22 @@ key_wired=0
 key_module="$HYPR/tide-island.lua"
 hyprland_backup=""
 if (( flag_keybinding )); then
-  if [[ -f $HYPR/hyprland.lua ]] && grep -q 'tide-island' "$HYPR/hyprland.lua"; then
-    log "hyprland.lua already loads the tide-island module; keeping it."
+  already_wired=0
+  if [[ -f $HYPR/hyprland.lua ]] && grep -q 'hypr\.tide-island' "$HYPR/hyprland.lua"; then
+    already_wired=1
+  fi
+  existing_binding=0
+  if [[ -f $HYPR/bindings.lua ]] \
+    && grep -Eq 'SUPER *\+ *SHIFT *\+ *SPACE|toggle-bar-tide|omarchy-tide-island-toggle' "$HYPR/bindings.lua"; then
+    existing_binding=1
+  fi
+
+  if (( already_wired )); then
+    log "hyprland.lua already loads hypr.tide-island; keeping it."
+    [[ -f $key_module ]] || install -m 0644 "$ROOT/packaging/hyprland-tide-island.lua" "$key_module"
     key_wired=1
-    key_module="$HYPR/tide-island.lua"
-  elif [[ -f $HYPR/bindings.lua ]] && grep -E 'SHIFT *\+ *SPACE|toggle-bar-tide|tide-island-toggle' "$HYPR/bindings.lua" >/dev/null 2>&1; then
-    log "found an existing bar/tide binding in bindings.lua; leaving hypr config untouched."
+  elif (( existing_binding )); then
+    log "found an existing bar/tide binding in bindings.lua; leaving your hypr config untouched."
   elif [[ -f $HYPR/hyprland.lua ]]; then
     if [[ -e $key_module ]] && ! cmp -s "$ROOT/packaging/hyprland-tide-island.lua" "$key_module"; then
       cp "$key_module" "$BACKUPS/$TSTAMP.tide-island.lua"
@@ -138,7 +148,7 @@ if (( flag_keybinding )); then
     printf '\nrequire("default.hypr.require_optional").module("hypr.tide-island")\n' >>"$HYPR/hyprland.lua"
     hyprland_backup="$BACKUPS/$TSTAMP.hyprland.lua"
     key_wired=1
-    log "wired $key_module into hyprland.lua (relaunch or hyprctl reload to apply)."
+    log "wired $key_module into hyprland.lua (apply with hyprctl reload)."
   else
     log "no hyprland.lua found; keybinding module not wired."
   fi

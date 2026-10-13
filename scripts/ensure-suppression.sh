@@ -77,7 +77,7 @@ entry_pts() {
 
 source_basename() { echo "${1#omarchy.}"; }
 
-log() { printf 'ensure-suppression: %s\n' "$*"; }
+log() { printf 'ensure-suppression: %s\n' "$*" >&2; }
 
 ensure_clone() {
   local source="$1"
