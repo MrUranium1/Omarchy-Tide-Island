@@ -35,16 +35,20 @@ Item {
 
     // Effective settings = shipped defaults overridden by the user file.
     // These must match default/tide-island.json; tests/unit.sh asserts parity.
-    readonly property var defaults: ({
-        coordinateWithBar: true,
-        startWithBarHidden: true,
-        stopWithBarShown: true,
-        suppressOsd: true,
-        suppressNotifications: true,
-        serviceName: "tide-island.service",
-        togglesDir: home + "/.local/state/omarchy/toggles",
-        barOffFile: "bar-off"
-    })
+    function defaultConfig() {
+        return {
+            coordinateWithBar: true,
+            startWithBarHidden: true,
+            stopWithBarShown: true,
+            suppressOsd: true,
+            suppressNotifications: true,
+            serviceName: "tide-island.service",
+            togglesDir: plugin.home + "/.local/state/omarchy/toggles",
+            barOffFile: "bar-off"
+        }
+    }
+
+    property var defaults: defaultConfig()
 
     property var config: ({})
     property bool configOk: true
