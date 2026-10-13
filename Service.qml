@@ -33,29 +33,21 @@ Item {
 
     // ---------------------------------------------------------------- config
 
-    // Effective settings = shipped defaults overridden by the user file.
-    // These must match default/tide-island.json; tests/unit.sh asserts parity.
-    function defaultConfig() {
-        return {
-            coordinateWithBar: true,
-            startWithBarHidden: true,
-            stopWithBarShown: true,
-            suppressOsd: true,
-            suppressNotifications: true,
-            serviceName: "tide-island.service",
-            togglesDir: plugin.home + "/.local/state/omarchy/toggles",
-            barOffFile: "bar-off"
-        }
-    }
+    // Effective settings = shipped defaults (default/tide-island.json) overridden
+// by the user file (~/.config/omarchy/tide-island.json). Both are parsed as
+// JSON at runtime; tests/unit.sh keeps them in parity.
+    readonly property string defaultsPath:
+        Qt.resolvedUrl("default/tide-island.json").toString().replace("file://", "")
 
-    property var defaults: defaultConfig()
-
-    property var config: ({})
+    property var defaults: null
+    property var config: null
     property bool configOk: true
     property string configError: ""
 
     function getConfig(key) {
-        return config[key] !== undefined ? config[key] : defaults[key]
+        var d = plugin.defaults || {}
+        var c = plugin.config || {}
+        return c[key] !== undefined ? c[key] : d[key]
     }
 
     function loadConfig(raw) {
@@ -86,6 +78,22 @@ Item {
         onLoaded: plugin.loadConfig(text())
         onLoadFailed: plugin.loadConfig("")
         onFileChanged: reload()
+    }
+
+    // Shipped defaults, read from the same file tests/unit.sh lints against.
+    Process {
+        id: defaultsProc
+        running: true
+        command: ["bash", "-c", "cat \"$1\"", "--", plugin.defaultsPath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    plugin.defaults = JSON.parse(text)
+                } catch (err) {
+                    console.warn("tide-island: shipped defaults unparseable: " + String(err))
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------- bar-off watching
