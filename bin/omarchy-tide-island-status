@@ -9,9 +9,11 @@
 set -Eeuo pipefail
 
 PLUGIN_ID="mehir.tide-island"
+IPC_TARGET="tide-island"
 FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
 
-if out="$(omarchy-shell "$PLUGIN_ID" status 2>/dev/null || true)" && [[ "$out" == *'"plugin": "mehir.tide-island"'* ]]; then
+if out="$(omarchy-shell "$IPC_TARGET" status 2>/dev/null || true)" \
+  && echo "$out" | jq -e '.plugin == "mehir.tide-island"' >/dev/null 2>&1; then
   # Pretty-print the service's JSON status.
   python3 - "$out" <<'PY'
 import json, sys

@@ -19,6 +19,7 @@
 set -Eeuo pipefail
 
 PLUGIN_ID="mehir.tide-island"
+IPC_TARGET="tide-island"
 PLUGIN_DIR="${TIDE_ISLAND_PLUGIN_DIR:-$HOME/.config/omarchy/plugins/$PLUGIN_ID}"
 SYNC_SCRIPT="$PLUGIN_DIR/scripts/tide-sync.sh"
 FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
@@ -42,7 +43,7 @@ flip_flag_local() {
 }
 
 # 1) Ask the shell service. "ok" is the contract of `IpcHandler.toggle()`.
-out="$(omarchy-shell "$PLUGIN_ID" toggle 2>/dev/null || true)"
+out="$(omarchy-shell "$IPC_TARGET" toggle 2>/dev/null || true)"
 case "$out" in
   *ok*) ;;
   *)
