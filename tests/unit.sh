@@ -176,6 +176,31 @@ run_es --restore >/dev/null 2>&1 || true
 t "--restore leaves a pre-existing suppression untouched"
 grep -q 'The bar-off marker' "$es_osd" && ok || ko
 
+echo "  install-tide-runtime.sh (sandboxed HOME, forced bundle)"
+ir="$tmp/ir"
+ir_prefix="$ir/home/.local/share/omarchy-tide-island"
+mkdir -p "$ir/home/.local/bin"
+run_ir() {
+  HOME="$ir/home" TIDE_ISLAND_FORCE_BUNDLE=1 TIDE_ISLAND_PREFIX="$ir_prefix" \
+    TIDE_SYNC_SYSTEMCTL=/bin/true bash "$ROOT/scripts/install-tide-runtime.sh" "$@"
+}
+run_ir >/dev/null 2>&1
+t "installs the launcher and backend into the prefix"
+[[ -x "$ir_prefix/bin/tide-island" && -f "$ir_prefix/lib/libIslandBackend.so" ]] && ok || ko
+t "installs the QML tree"
+[[ -f "$ir_prefix/share/tide-island/shell.qml" ]] && ok || ko
+t "writes a user unit carrying our marker"
+grep -q 'managed by mehir.tide-island' "$ir/home/.config/systemd/user/tide-island.service" && ok || ko
+t "links tide-island onto PATH"
+[[ -L "$ir/home/.local/bin/tide-island" ]] && ok || ko
+t "second run is idempotent"
+run_ir >/dev/null 2>&1 && [[ "$(cat "$ir_prefix/.version")" == "$(cat "$ROOT/vendor/tide-island/VERSION")" ]] && ok || ko
+
+printf 'FOREIGN UNIT\n' >"$ir/home/.config/systemd/user/tide-island.service"
+run_ir >/dev/null 2>&1
+t "never clobbers a foreign (non-managed) unit"
+grep -q 'FOREIGN UNIT' "$ir/home/.config/systemd/user/tide-island.service" && ok || ko
+
 echo
 echo "unit: $pass passed, $fail failed"
 (( fail == 0 ))

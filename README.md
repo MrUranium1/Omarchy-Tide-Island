@@ -42,20 +42,37 @@ any polling daemon.
 
 ## Installation
 
-Prerequisites: `tide-island`, `quickshell`, `jq`, `patch` (Arch, from the
-AUR for tide-island). `scripts/install-dependencies.sh` reports what is
-missing and installs it on request.
+Prerequisites: `quickshell`, `jq`, `patch` (all present on a stock Omarchy).
+Tide Island itself is **bundled** with the plugin, so there is no separate
+package/AUR step. `scripts/install-dependencies.sh` reports anything missing.
+
+### Add it as a plugin (recommended)
 
 ```sh
-# 1. drop the repo wherever you keep your config, then
-bash install.sh
-#    (or from any Omarchy session: omarchy-shell tide-island setup)
+omarchy plugin add https://github.com/MrUranium1/Omarchy-Tide-Island --enable
 ```
 
-That does all of this, safely:
+The first time the plugin loads it notices it is not set up yet and runs the
+whole setup by itself: it installs the bundled Tide Island into
+`~/.local/share/omarchy-tide-island` (no sudo), links `~/.local/bin/tide-island`,
+installs the user `tide-island.service`, adds the CLI shims, seeds the config,
+creates + patches the OSD/notification clones and wires the keybinding. Then the
+island appears whenever the bar is hidden.
 
-1. Installs the `omarchy-tide-island-toggle` / `omarchy-tide-island-status`
-   commands into `~/.local/bin/`.
+### Manual install
+
+```sh
+bash install.sh            # from a checkout
+# or, from any Omarchy session:
+omarchy-shell tide-island setup
+```
+
+Either path does all of this, safely:
+
+1. Installs the bundled Tide Island into `~/.local/share/omarchy-tide-island`
+   (skipped when you already have `tide-island` on `PATH`), then the
+   `omarchy-tide-island-toggle` / `omarchy-tide-island-status` commands into
+   `~/.local/bin/`.
 2. Seeds `~/.config/omarchy/tide-island.json` (only if absent).
 3. Clones `omarchy.osd` / `omarchy.notifications` into your config (only if
    you don't have clones yet) and patches them to stand down while the flag
@@ -73,7 +90,8 @@ That does all of this, safely:
 Everything is recorded in `~/.local/state/omarchy/tide-island/installed.json`.
 Repeat `install.sh` to repair; `uninstall.sh` reverses it (nothing user-created
 is ever deleted, just backed up, and a stand-down you had before the plugin is
-left in place).
+left in place). Pass `--remove-runtime` to also remove the bundled Tide Island
+from `~/.local`.
 
 ## Configuration
 
@@ -116,7 +134,9 @@ scripts/patch-tide-lyrics.sh --restore    # undoes it
 ## What this never touches
 
 - `~/.config/tide-island/` (your Tide Island settings) — never.
-- Your Tide QML override / `~/.local/share/tide-island/` — never.
+- Your Tide QML override / `~/.local/share/tide-island/` — never. The bundled
+  runtime is installed to a separate prefix (`~/.local/share/omarchy-tide-island`)
+  so it cannot collide with an override you already have.
 - The built-in `omarchy.osd` / `omarchy.notifications` plugins — never;
   only your own clones are patched (creating them if needed).
 - Your Hyprland bindings when a bar/tide binding already exists.
@@ -139,4 +159,6 @@ machine without disturbing the session.
 See NOTICE.md and LICENSE. The plugin's own code is MIT. The suppression
 patches are modifications of Omarchy's MIT plugins. The Tide lyrics patch is a
 derivative of Tide Island's GPL-3.0-only code (`LICENSES/GPL-3.0-only.txt`).
+The bundled Tide Island runtime under `vendor/tide-island/` is Tide Island
+itself and stays **GPL-3.0-only** (see `vendor/tide-island/PROVENANCE.md`).
 Quickshell (LGPL-3.0-only) is a runtime dependency, used as a separate program.

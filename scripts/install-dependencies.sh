@@ -36,7 +36,6 @@ parse_args() {
 }
 
 REQUIRED=(
-  "tide-island:tide-island:the Pacific Dawn-inspired dynamic island"
   "quickshell:quickshell:the QtQuick shell that renders Tide Island"
   "jq:jq:for reading the plugin config file"
   "patch:patch:for patching the OSD/notifications clones"

@@ -2,20 +2,46 @@
 #
 # plugin-setup.sh
 #
-# Interactive setup launcher, opened in a terminal by
-# `omarchy-shell tide-island setup`. Runs every opt-in piece of the plugin:
-# dependency check (+ optional install), OSD/notifications suppression, CLI
-# shims, config seeding and the keybinding module (skipped automatically when
-# a bar/tide binding already exists). Safe to run repeatedly.
+# Sets up every piece of the plugin: the bundled Tide Island runtime,
+# OSD/notifications stand-down, CLI shims, config seed, keybinding module and a
+# first reconcile. Safe to run repeatedly.
+#
+#   (no args)   interactive; opened in a terminal by `omarchy-shell tide-island
+#               setup`, and offers to install missing packages.
+#   --auto      non-interactive; run by the shell service on first load so a
+#               freshly added plugin sets itself up silently.
 
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
+usage() {
+  cat <<USAGE
+Usage: plugin-setup.sh [--auto] [--help]
+
+  --auto   Non-interactive setup (no prompts, no terminal). Used on first load.
+  --help   Show this help.
+USAGE
+}
+
+mode="interactive"
+while (( $# )); do
+  case "$1" in
+    --auto) mode="auto" ;;
+    -h | --help) usage && exit 0 ;;
+    *) usage >&2 && exit 2 ;;
+  esac
+  shift
+done
+
+if [[ $mode == "auto" ]]; then
+  exec bash "$ROOT/install.sh"
+fi
+
 echo "== Tide Island plugin setup =="
 echo
 
-echo "1/3 Dependencies"
+echo "1/2 Dependencies"
 bash "$ROOT/scripts/install-dependencies.sh" || {
   printf '\nInstall the missing packages now? [y/N] '
   read -r ans
@@ -25,13 +51,7 @@ bash "$ROOT/scripts/install-dependencies.sh" || {
 }
 
 echo
-echo "2/3 OSD + notifications stand-down (clones + patches)"
-if bash "$ROOT/scripts/ensure-suppression.sh"; then
-  :
-fi
-
-echo
-echo "3/3 CLI shims, config seed, keybinding + first reconcile"
+echo "2/2 Runtime, suppression, CLI shims, config, keybinding + first reconcile"
 bash "$ROOT/install.sh" || {
   printf '\ninstall.sh failed; fix the reported issue and re-run setup.\n' >&2
   exit 1

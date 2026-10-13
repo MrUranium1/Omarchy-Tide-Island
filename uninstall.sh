@@ -21,19 +21,23 @@ STATE_DIR="$HOME/.local/state/omarchy/tide-island"
 BACKUPS="$STATE_DIR/backups"
 INSTALLED_FILE="$STATE_DIR/installed.json"
 HYPR="$HOME/.config/hypr"
+SYSTEMCTL="${TIDE_SYNC_SYSTEMCTL:-systemctl}"
 TSTAMP="$(date +%Y%m%d-%H%M%S)"
 
 flag_remove_plugin=0
 flag_purge_config=0
+flag_remove_runtime=0
 
 usage() {
   cat <<USAGE
-Usage: uninstall.sh [--remove-plugin] [--purge-config] [--help]
+Usage: uninstall.sh [--remove-plugin] [--purge-config] [--remove-runtime] [--help]
 
   --remove-plugin   Also remove OSD/notifications clones we created ourselves
                     and disable the tide-island plugin.
   --purge-config    Delete ~/.config/omarchy/tide-island.json (defaults to
                     keeping it so re-enabling is one command).
+  --remove-runtime  Also remove the bundled Tide Island installed under
+                    ~/.local/share/omarchy-tide-island (unit, PATH link, files).
   --help            Show this help.
 USAGE
 }
@@ -42,6 +46,7 @@ while (( $# )); do
   case "$1" in
     --remove-plugin) flag_remove_plugin=1 ;;
     --purge-config) flag_purge_config=1 ;;
+    --remove-runtime) flag_remove_runtime=1 ;;
     -h | --help) usage && exit 0 ;;
     *) usage >&2 && exit 2 ;;
   esac
@@ -128,6 +133,31 @@ if [[ $flag_purge_config == 1 && -f $CONFIG_TARGET ]]; then
   log "removed $CONFIG_TARGET (backup kept). Re-running install.sh resurrects it."
 else
   log "left $CONFIG_TARGET in place (pass --purge-config to remove it)."
+fi
+
+# ------------------------------------------------------------------ runtime
+
+if (( flag_remove_runtime )); then
+  PREFIX="${TIDE_ISLAND_PREFIX:-$HOME/.local/share/omarchy-tide-island}"
+  "$SYSTEMCTL" --user stop tide-island.service 2>/dev/null || true
+  unit="$HOME/.config/systemd/user/tide-island.service"
+  if [[ -f $unit ]] && grep -qF '# managed by mehir.tide-island' "$unit"; then
+    rm -f "$unit"
+    "$SYSTEMCTL" --user daemon-reload 2>/dev/null || true
+    log "removed $unit"
+  fi
+  link="$HOME/.local/bin/tide-island"
+  if [[ -L $link && "$(readlink "$link")" == "$PREFIX/bin/tide-island" ]]; then
+    rm -f "$link"
+    log "removed $link"
+  fi
+  rm -f "$HOME/.local/share/applications/tide-island.desktop"
+  if [[ -f "$PREFIX/.version" ]]; then
+    rm -rf "${PREFIX:?}"
+    log "removed bundled runtime $PREFIX"
+  fi
+else
+  log "kept the bundled runtime (pass --remove-runtime to remove it)."
 fi
 
 # ------------------------------------------------------------------ plugin

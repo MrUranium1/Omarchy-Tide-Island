@@ -64,6 +64,15 @@ mkdir -p "$BIN_TARGET" "$PLUGINS_DIR" "$STATE_DIR" "$BACKUPS"
 log "checking dependencies..."
 bash "$ROOT/scripts/install-dependencies.sh" || true
 
+# ------------------------------------------------------- Tide Island runtime
+
+# Install the bundled Tide Island into ~/.local when the user has no
+# tide-island yet, so a plain "add plugin" gives them a working island. Does
+# nothing if tide-island is already on PATH (e.g. the package is installed).
+log "ensuring the Tide Island runtime is available..."
+bash "$ROOT/scripts/install-tide-runtime.sh" \
+  || log "bundled runtime install failed; install the tide-island package to fall back." >&2
+
 # -------------------------------------------------------------- CLI shims
 
 cli_shims=()

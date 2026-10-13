@@ -1,0 +1,21 @@
+module TideIsland
+typeinfo tide-island-config-app.qmltypes
+prefer :/qt/qml/TideIsland/
+Main 1.0 Main.qml
+singleton Theme 1.0 Theme.qml
+singleton ConfigStore 1.0 ConfigStore.qml
+PagePanel 1.0 PagePanel.qml
+ConfigTextField 1.0 ConfigTextField.qml
+HiddenPathDialog 1.0 HiddenPathDialog.qml
+General 1.0 General.qml
+CustomPage 1.0 CustomPage.qml
+Wallpaper 1.0 Wallpaper.qml
+WallpaperSettings 1.0 WallpaperSettings.qml
+TlpSettings 1.0 TlpSettings.qml
+WeatherSettings 1.0 WeatherSettings.qml
+FontSettings 1.0 FontSettings.qml
+Interaction 1.0 Interaction.qml
+Shortcut 1.0 Shortcut.qml
+ApplicationLauncherSettings 1.0 ApplicationLauncherSettings.qml
+depends QtQuick
+

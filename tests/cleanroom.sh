@@ -25,6 +25,9 @@ done
 SB="$(mktemp -d "${TMPDIR:-/tmp}/tide-island-cleanroom.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
 export HOME="$SB/home"
+# Force the bundled runtime path even though this machine may have the
+# tide-island package on PATH; the sandbox has its own $HOME.
+export TIDE_ISLAND_FORCE_BUNDLE=1
 BIN="$SB/bin"
 mkdir -p "$HOME/.local/bin" "$BIN"
 export PATH="$BIN:$PATH"
@@ -101,6 +104,14 @@ echo "tide-island clean-room lifecycle test ($SB)"
 echo "  fresh install"
 (cd "$ROOT" && bash install.sh) >"$SB/i1.log" 2>&1 && ok "install exits 0" || { ko "install failed"; tail -n20 "$SB/i1.log"; }
 [[ -x "$HOME/.local/bin/omarchy-tide-island-toggle" && -x "$HOME/.local/bin/omarchy-tide-island-status" ]] && ok "CLI shims installed" || ko "CLI shims missing"
+PREFIX="$HOME/.local/share/omarchy-tide-island"
+[[ -x "$PREFIX/bin/tide-island" ]] && ok "bundled Tide Island runtime installed" || ko "bundled runtime missing"
+[[ -f "$PREFIX/lib/libIslandBackend.so" ]] && ok "compiled backend vendored" || ko "backend lib missing"
+[[ -L "$HOME/.local/bin/tide-island" ]] && ok "tide-island linked onto PATH" || ko "no PATH link"
+[[ -f "$HOME/.config/systemd/user/tide-island.service" ]] \
+  && grep -q 'managed by mehir.tide-island' "$HOME/.config/systemd/user/tide-island.service" \
+  && ok "user service unit written" || ko "service unit missing"
+[[ -f "$HOME/.local/share/applications/tide-island.desktop" ]] && ok "desktop entry installed" || ko "desktop entry missing"
 [[ -f "$CONFIG" ]] && ok "config seeded" || ko "config not seeded"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "osd clone patched" || ko "osd clone not patched"
 grep -q 'popupsSuppressed' "$PLUGINS/mehir.notifications/Service.qml" 2>/dev/null && ok "notifications clone patched" || ko "notifications clone not patched"
@@ -123,6 +134,7 @@ b1=$(find "$STATE/backups" -type f 2>/dev/null | wc -l)
 [[ "$b0" == "$b1" ]] && ok "no duplicate backups on re-run" || ko "backups grew ($b0 -> $b1)"
 [[ "$(find "$PLUGINS" -maxdepth 1 -name '*.osd' | wc -l)" == 1 ]] && ok "clone not duplicated" || ko "clone duplicated"
 jq -e '.suppression.osd.createdByUs == true' "$STATE/installed.json" >/dev/null 2>&1 && ok "createdByUs preserved across re-run" || ko "createdByUs lost on re-run"
+[[ "$(cat "$PREFIX/.version" 2>/dev/null)" == "$(cat "$ROOT/vendor/tide-island/VERSION")" ]] && ok "runtime version marker intact after re-run" || ko "runtime version marker changed"
 
 echo "  uninstall (default)"
 (cd "$ROOT" && bash uninstall.sh) >"$SB/u1.log" 2>&1 && ok "uninstall exits 0" || { ko "uninstall failed"; tail -n20 "$SB/u1.log"; }
@@ -138,6 +150,13 @@ echo "  uninstall --remove-plugin --purge-config"
 echo "  reinstall"
 (cd "$ROOT" && bash install.sh) >"$SB/i3.log" 2>&1 && ok "reinstall exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i3.log"; }
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "reinstalled cleanly" || ko "reinstall incomplete"
+
+echo "  uninstall --remove-runtime"
+(cd "$ROOT" && bash uninstall.sh --remove-plugin --remove-runtime) >"$SB/u3.log" 2>&1 \
+  && ok "uninstall --remove-runtime exits 0" || { ko "failed"; tail -n20 "$SB/u3.log"; }
+[[ ! -e "$PREFIX" ]] && ok "bundled runtime removed" || ko "runtime not removed"
+[[ ! -e "$HOME/.config/systemd/user/tide-island.service" ]] && ok "service unit removed" || ko "unit not removed"
+[[ ! -e "$HOME/.local/bin/tide-island" ]] && ok "PATH link removed" || ko "PATH link not removed"
 
 echo
 echo "cleanroom: $pass passed, $fail failed"

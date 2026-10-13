@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "Mehir",
   "license": "MIT",
-  "description": "Coordinate Tide Island with the Omarchy bar: show Tide Island when the bar is hidden, stand down the built-in OSD and notification popups while Tide Island owns the screen, and keep the two synchronized on every toggle and restart. Install the CLI + suppression clones with install.sh (also available as `omarchy-shell tide-island setup`).",
+  "description": "Coordinate Tide Island with the Omarchy bar: show Tide Island when the bar is hidden, stand down the built-in OSD and notification popups while Tide Island owns the screen, and keep the two synchronized on every toggle and restart. The bundled Tide Island runtime and all setup install themselves on first load; manage with `omarchy-shell tide-island ...`.",
   "kinds": [
     "service"
   ],

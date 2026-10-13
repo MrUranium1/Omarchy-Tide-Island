@@ -31,12 +31,27 @@ echo "  entry points exist"
 for f in "Service.qml" "default/tide-island.json" "packaging/hyprland-tide-island.lua" \
          "install.sh" "uninstall.sh" \
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
-         "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
+         "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
   [[ -f $ROOT/$f ]] && ok || { t "missing $f" && ko; }
 done
+
+echo "  vendored Tide Island runtime"
+for f in "vendor/tide-island/VERSION" "vendor/tide-island/PROVENANCE.md" \
+         "vendor/tide-island/bin/tide-island" "vendor/tide-island/lib/libIslandBackend.so" \
+         "vendor/tide-island/lib/qt6/qml/TideIsland/qmldir" \
+         "vendor/tide-island/lib/qt6/qml/IslandBackend/qmldir" \
+         "vendor/tide-island/share/tide-island/shell.qml" \
+         "vendor/tide-island/share/applications/tide-island.desktop" \
+         "LICENSES/GPL-3.0-only.txt"; do
+  [[ -f $ROOT/$f ]] && ok || { t "missing $f" && ko; }
+done
+bash -n "$ROOT/vendor/tide-island/bin/tide-island" \
+  && t "vendored launcher parses" && ok || ko
+grep -q 'GNU GENERAL PUBLIC LICENSE' "$ROOT/LICENSES/GPL-3.0-only.txt" \
+  && t "GPL-3.0 text present" && ok || ko
 
 echo "  bash syntax"
 while IFS= read -r -d '' f; do

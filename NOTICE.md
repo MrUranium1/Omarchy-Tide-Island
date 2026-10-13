@@ -1,7 +1,8 @@
 # NOTICE
 
-This repository is original work (MIT) plus small patches derived from other
-projects. Their licenses are honored as follows.
+This repository is original work (MIT), plus small patches derived from other
+projects, plus a bundled third-party runtime. Their licenses are honored as
+follows.
 
 ## Original plugin code (MIT)
 
@@ -41,6 +42,19 @@ source code and must be distributed under Tide Island's license.
 - The patch does not change Tide Island's licensing: applying or redistributing
   it applies only to Tide Island's GPL-3.0-only code as normal.
 
+## Bundled: Tide Island runtime (GPL-3.0-only)
+
+`vendor/tide-island/` is an unmodified copy of the Tide Island 1.0.41 runtime
+(launcher script, QML tree, compiled `TideIsland`/`IslandBackend` QML modules,
+lyrics backend). The plugin installs it, unprivileged, into the user's
+`~/.local/share/omarchy-tide-island` so the island works without the user
+installing the `tide-island` package.
+
+- Source: https://github.com/enhaoswen/Tide-island (Tide Island, version 1.0.41)
+- License: **GPL-3.0-only** (`LICENSES/GPL-3.0-only.txt`)
+- See `vendor/tide-island/PROVENANCE.md` for the exact file list and the
+  corresponding-source note. No source changes were made by this project.
+
 ## Runtime dependency: Quickshell (LGPL-3.0-only)
 
 The plugin is loaded and rendered by **Quickshell** (https://quickshell.org,
@@ -52,9 +66,11 @@ itself, your changes to Quickshell remain under the LGPL.
 ## Scope of licenses
 
 The plugin's own code is one independent work (MIT). The Tide lyrics patch is a
-separate, Tide-derived work (GPL-3.0-only). They are merely distributed
-together in this repository (an aggregate); the GPL obligations apply only to
-the GPL-covered file, not to the MIT-licensed plugin.
+separate, Tide-derived work (GPL-3.0-only), and the bundled runtime in
+`vendor/tide-island/` is Tide Island itself (GPL-3.0-only). They are merely
+distributed together in this repository (an aggregate); the GPL obligations
+apply only to the GPL-covered patch and the vendored runtime, not to the
+MIT-licensed plugin.
 
 ## Shared config format
 

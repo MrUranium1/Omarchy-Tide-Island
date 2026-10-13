@@ -19,3 +19,11 @@ Initial release.
   defaults and offline unit tests covering the reconcile matrix.
 - install.sh / uninstall.sh with full state recording and backups for
   reversible removal.
+- Bundled Tide Island runtime (`vendor/tide-island/`, upstream 1.0.41) installed
+  unprivileged into `~/.local` so the island works without the `tide-island`
+  package.
+- Silent auto-setup on first plugin load (Service.qml + `plugin-setup.sh
+  --auto`): adding the plugin installs the runtime, shims and suppression once.
+- `scripts/install-tide-runtime.sh` (relocatable prefix, user systemd unit,
+  PATH shim) and OSD/notification suppression.
+- Clean-room lifecycle test (`tests/cleanroom.sh`).

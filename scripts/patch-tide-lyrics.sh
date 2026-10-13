@@ -36,7 +36,13 @@ resolve_tide_dir() {
       return 0
     fi
   fi
-  # 3) system copy
+  # 3) the bundled runtime the plugin installs under ~/.local
+  local bundled="${TIDE_ISLAND_PREFIX:-$HOME/.local/share/omarchy-tide-island}/share/tide-island"
+  if [[ -d $bundled ]]; then
+    echo "$bundled"
+    return 0
+  fi
+  # 4) system copy
   echo "/usr/share/tide-island"
 }
 
@@ -45,7 +51,8 @@ usage() {
 Usage: patch-tide-lyrics.sh [--dir PATH] [--restore] [--help]
 
   --dir PATH   Tide Island source tree to patch (default: the one the running
-               service uses, or /usr/share/tide-island).
+               service uses, then the bundled ~/.local runtime, then
+               /usr/share/tide-island).
   --restore    Undo the change (restores the pre-patch backup, or reverse-applies).
   --help       Show this help.
 USAGE

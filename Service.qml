@@ -192,6 +192,49 @@ Item {
     onNotificationsSuppressionChanged: plugin.needsSetup = plugin.setupNeeded()
     onCliInstalledChanged: plugin.needsSetup = plugin.setupNeeded()
 
+    // Auto-setup on first load: a freshly added plugin installs the bundled
+    // runtime, CLI shims and OSD/notification stand-down once, silently, so
+    // adding the plugin is enough. A marker file makes it a one-time action;
+    // re-run manually any time with `omarchy-shell tide-island setup`.
+    property bool autoSetupTried: false
+    readonly property string autoSetupMarker:
+        home + "/.local/state/omarchy/tide-island/auto-setup.done"
+
+    function maybeAutoSetup() {
+        if (plugin.autoSetupTried) return
+        plugin.autoSetupTried = true
+        if (setupScript === "" || !plugin.setupNeeded()) return
+        markerProbe.running = true
+    }
+
+    Process {
+        id: markerProbe
+        running: false
+        command: ["bash", "-c", "test -f \"$1\"", "--", plugin.autoSetupMarker]
+        onExited: (code) => { if (code !== 0) autoSetupProc.running = true }
+    }
+    Process {
+        id: autoSetupProc
+        command: ["bash", plugin.setupScript, "--auto"]
+        onExited: (code) => {
+            console.log("tide-island: auto-setup finished (exit " + code + ")")
+            markerWrite.running = true
+            plugin.refreshStatus()
+        }
+    }
+    Process {
+        id: markerWrite
+        running: false
+        command: ["bash", "-c",
+            "d=$(dirname \"$1\"); mkdir -p \"$d\"; touch \"$1\"", "--",
+            plugin.autoSetupMarker]
+    }
+    Timer {
+        id: autoSetupDelay
+        interval: 1200
+        onTriggered: plugin.maybeAutoSetup()
+    }
+
     property bool barHiddenPending: false
     onBarHiddenChanged: if (plugin.barHidden !== plugin.barHiddenPending) {
         plugin.barHiddenPending = plugin.barHidden
@@ -330,5 +373,6 @@ Item {
         configFile.reload()
         plugin.probeBar()
         plugin.scheduleReconcile()
+        autoSetupDelay.start()
     }
 }
