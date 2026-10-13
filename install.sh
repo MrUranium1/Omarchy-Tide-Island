@@ -103,8 +103,8 @@ fi
 
 # -------------------------------------------------------------- suppression
 
-osd_clone_before="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.osd"))[].id] | join(",")')"
-notif_clone_before="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.notifications"))[].id] | join(",")')"
+osd_clone_before="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.osd")) | .id] | join(",")')"
+notif_clone_before="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.notifications")) | .id] | join(",")')"
 
 if (( flag_suppression )); then
   log "ensuring OSD/notifications stand down while Tide Island is on..."
@@ -113,8 +113,8 @@ else
   log "suppression setup skipped (--no-suppression)."
 fi
 
-osd_clone_after="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.osd"))[].id] | join(",")')"
-notif_clone_after="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.notifications"))[].id] | join(",")')"
+osd_clone_after="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.osd")) | .id] | join(",")')"
+notif_clone_after="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | select(.firstParty == false and .clonedFrom == "omarchy.notifications")) | .id] | join(",")')"
 
 # ------------------------------------------------------------- keybinding
 
