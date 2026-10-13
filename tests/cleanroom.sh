@@ -324,6 +324,75 @@ fi
 grep -q 'FAILED' "$STATE/ensure-mount.log" 2>/dev/null && ok "failure state logged for diagnosis" || ko "no failure log"
 mv "$SB/osd.backup.qml" "$PLUGINS/mehir.osd/Osd.qml"
 
+echo "  island keybindings wired into hyprland.lua at install"
+HYPRLUA="$HOME/.config/hypr/hyprland.lua"
+mkdir -p "$HOME/.config/hypr"
+cat >"$HYPRLUA" <<'LUA'
+-- user config
+hl.config({})
+for i = 1, 10 do
+  hl.workspace(i)
+end
+LUA
+PREFIX="$HOME/.local/share/omarchy-tide-island"
+
+(cd "$ROOT" && bash install.sh) >"$SB/k1.log" 2>&1 && ok "install with hyprland.lua exits 0" || { ko "install failed"; tail -n20 "$SB/k1.log"; }
+grep -q -- '-- Tide Island shortcuts: begin (managed by Tide Island Config App).' "$HYPRLUA" \
+  && ok "install writes the managed shortcut block" || ko "no shortcut block written"
+[[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "block written exactly once" || ko "block duplicated"
+[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 12 ]] && ok "all 12 island bindings present" || ko "expected 12 bindings, found $(grep -c 'hl\.bind(' "$HYPRLUA")"
+grep -q 'call island toggle' "$HYPRLUA" && ok "island toggle binding present" || ko "island toggle binding missing"
+grep -q -- "$PREFIX/share/tide-island call tide swipeLeft" "$HYPRLUA" \
+  && ok "bindings point at the installed QML runtime" || ko "bindings use the wrong QML path"
+grep -q 'hl.workspace' "$HYPRLUA" && ok "pre-existing hyprland.lua content preserved" || ko "existing content lost"
+jq -e '.shortcutBinding.createdByUs == true and .shortcutBinding.wired == true' "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "installed.json records the shortcut block" || ko "installed.json missing shortcutBinding"
+
+echo "  repeated install keeps a single block"
+(cd "$ROOT" && bash install.sh) >"$SB/k2.log" 2>&1 && ok "repeat install exits 0" || ko "repeat install failed"
+if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 12 ]]; then
+  ok "repeat install leaves exactly one block"
+else
+  ko "repeat install changed the block"
+fi
+
+echo "  uninstall removes a block it created, preserving other content"
+(cd "$ROOT" && bash uninstall.sh) >"$SB/k3.log" 2>&1 && ok "uninstall exits 0" || { ko "uninstall failed"; tail -n20 "$SB/k3.log"; }
+grep -q -- '-- Tide Island shortcuts: begin' "$HYPRLUA" && ko "uninstall left our block behind" || ok "uninstall removed our block"
+grep -q 'hl.workspace' "$HYPRLUA" && ok "uninstall preserved unrelated hyprland.lua content" || ko "uninstall damaged hyprland.lua"
+
+echo "  settings-app edit survives install and uninstall"
+(cd "$ROOT" && bash install.sh) >"$SB/k4.log" 2>&1 && ok "reinstall exits 0" || ko "reinstall failed"
+sed -i 's/SUPER + ALT + I/SUPER + ALT + L/' "$HYPRLUA"
+ed_sha="$(sha256sum "$HYPRLUA" | awk '{print $1}')"
+(cd "$ROOT" && bash install.sh) >"$SB/k5.log" 2>&1 && ok "install after an app edit exits 0" || ko "install failed"
+[[ "$(sha256sum "$HYPRLUA" | awk '{print $1}')" == "$ed_sha" ]] \
+  && ok "install never rewrites an existing (app-edited) block" || ko "install clobbered the edited block"
+(cd "$ROOT" && bash uninstall.sh) >"$SB/k6.log" 2>&1 && ok "uninstall after an app edit exits 0" || ko "uninstall failed"
+grep -q 'SUPER + ALT + L' "$HYPRLUA" && ok "uninstall preserves an app-edited block" || ko "uninstall removed the edited block"
+
+echo "  a block that predates the plugin is never claimed or removed"
+rm -f "$STATE/installed.json"
+cat >"$HYPRLUA" <<'LUA'
+hl.config({})
+LUA
+printf '%s\nhl.bind("SUPER + X", do_thing)\n%s\n' \
+  '-- Tide Island shortcuts: begin (managed by Tide Island Config App).' \
+  '-- Tide Island shortcuts: end.' >>"$HYPRLUA"
+(cd "$ROOT" && bash install.sh) >"$SB/k7.log" 2>&1 && ok "install over a foreign block exits 0" || ko "install failed"
+jq -e '.shortcutBinding.createdByUs == false' "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "install does not claim a block that predated the plugin" || ko "install wrongly claimed the foreign block"
+[[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "install did not append a second block" || ko "install duplicated the foreign block"
+(cd "$ROOT" && bash uninstall.sh) >"$SB/k8.log" 2>&1 && ok "uninstall over a foreign block exits 0" || ko "uninstall failed"
+grep -q 'SUPER + X' "$HYPRLUA" && ok "uninstall leaves a foreign block untouched" || ko "uninstall removed a foreign block"
+
+echo "  --no-shortcuts leaves hyprland.lua without a block"
+cat >"$HYPRLUA" <<'LUA'
+hl.config({})
+LUA
+(cd "$ROOT" && bash install.sh --no-shortcuts) >"$SB/k9.log" 2>&1 && ok "install --no-shortcuts exits 0" || ko "install --no-shortcuts failed"
+grep -q -- '-- Tide Island shortcuts: begin' "$HYPRLUA" && ko "--no-shortcuts still wrote a block" || ok "--no-shortcuts wrote no block"
+
 echo
 echo "cleanroom: $pass passed, $fail failed"
 (( fail == 0 ))

@@ -29,6 +29,26 @@ jq -e . "$ROOT/default/tide-island.json" >/dev/null && t "default config is vali
 jq -e '.islandExclusiveZone == 9 and .islandTopMargin == 1 and .islandBackgroundOpacity == 100
        and .islandHeight == 36 and .islandWidth == 140' \
   "$ROOT/default/tide-userconfig.json" >/dev/null && t "default Tide look carries the requested values" && ok || ko
+jq -e '
+  ([.shortcutBindings[] | select(.key != "") | [.mods, .key, .target, .method]] | sort)
+  == ([
+    ["SUPER ALT","H","tide","swipeLeft"],
+    ["SUPER ALT","J","tide","showClock"],
+    ["SUPER ALT","T","tide","showTimer"],
+    ["SUPER ALT","M","tide","togglePlayer"],
+    ["SUPER ALT","C","tide","toggleControlCenter"],
+    ["SUPER ALT","P","tide","togglePowerMenu"],
+    ["SUPER ALT","N","tide","toggleNotificationCenter"],
+    ["SUPER ALT","A","tide","toggleApplicationLauncher"],
+    ["SUPER ALT","O","tide","toggleFileShelf"],
+    ["SUPER ALT","V","tide","toggleClipboard"],
+    ["SUPER ALT","D","tide","toggleCalendar"],
+    ["SUPER ALT","I","island","toggle"]
+  ] | sort)
+  and ([.shortcutBindings[] | select(.key == "") | .method] | sort
+       == ["swipeRight","toggle","toggleWallpaperPicker","toggleWeather"])
+' "$ROOT/default/tide-userconfig.json" >/dev/null \
+  && t "default Tide shortcuts are the 12 island bindings" && ok || ko
 
 echo "  entry points exist"
 for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json" \
@@ -36,7 +56,7 @@ for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json"
          "install.sh" "uninstall.sh" \
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
-         "scripts/ensure-mount.sh" "scripts/teardown.sh" \
+         "scripts/ensure-mount.sh" "scripts/teardown.sh" "scripts/wire-shortcuts.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
@@ -100,6 +120,24 @@ else
 fi
 grep -q 'syncSuppression' "$ROOT/scripts/ensure-mount.sh" \
   && t "ensure-mount verifies the mount over the shell IPC" && ok || ko
+
+echo "  wire-shortcuts.sh contract"
+if timeout 5 "$ROOT/scripts/wire-shortcuts.sh" --help >/dev/null 2>&1; then
+  t "wire-shortcuts.sh --help exits 0" && ok
+else
+  t "wire-shortcuts.sh --help did not exit cleanly" && ko
+fi
+block="$(timeout 5 "$ROOT/scripts/wire-shortcuts.sh" --print-block 2>/dev/null || true)"
+if grep -q -- '-- Tide Island shortcuts: begin' <<<"$block" \
+  && grep -q -- '-- Tide Island shortcuts: end\.' <<<"$block" \
+  && grep -q 'island toggle' <<<"$block"; then
+  t "wire-shortcuts.sh emits the app's managed block with the island binding" && ok
+else
+  t "wire-shortcuts.sh did not emit the expected managed block" && ko
+fi
+jq -e '.shortcutBindings[] | select(.target == "island" and .method == "toggle" and .key == "I")' \
+  "$ROOT/default/tide-userconfig.json" >/dev/null \
+  && t "default userconfig carries the island binding that gets wired" && ok || ko
 
 echo "  omarchy validates the plugin folder"
 if (cd "$ROOT" && omarchy plugin validate . >/dev/null 2>&1); then

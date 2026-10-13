@@ -32,15 +32,17 @@ TSTAMP="$(date +%Y%m%d-%H%M%S)"
 flag_keybinding=1
 flag_config=1
 flag_suppression=1
+flag_shortcuts=1
 
 usage() {
   cat <<USAGE
-Usage: install.sh [--no-keybinding] [--no-config] [--no-suppression] [--help]
+Usage: install.sh [--no-keybinding] [--no-config] [--no-suppression] [--no-shortcuts] [--help]
 
   --no-keybinding    Skip wiring the SUPER + SHIFT + SPACE binding. Requires a
                      separate line in hyprland.lua to load hypr/tide-island.lua.
   --no-config        Do not seed ~/.config/omarchy/tide-island.json.
   --no-suppression   Do not patch/clone the OSD and notifications plugins.
+  --no-shortcuts     Do not apply the island keybindings to hyprland.lua.
   --help             Show this help.
 USAGE
 }
@@ -50,6 +52,7 @@ while (( $# )); do
     --no-keybinding) flag_keybinding=0 ;;
     --no-config) flag_config=0 ;;
     --no-suppression) flag_suppression=0 ;;
+    --no-shortcuts) flag_shortcuts=0 ;;
     -h | --help) usage && exit 0 ;;
     *) usage >&2 && exit 2 ;;
   esac
@@ -179,6 +182,34 @@ else
   log "keybinding setup skipped (--no-keybinding)."
 fi
 
+# ------------------------------------------------------- island shortcuts
+
+# Apply the island keybindings (the same twelve the settings app shows) into the
+# app's OWN managed block in hyprland.lua, so they are live on a fresh install
+# without opening the settings app. Non-destructive: a block that is already
+# there (app- or user-made) is left untouched, and teardown only removes a block
+# we created and nobody has edited since.
+shortcut_state="$(jq -n '{ wired: false, createdByUs: false, config: "", blockSha256: "", qmlPath: "", backup: "" }')"
+if (( flag_shortcuts )); then
+  if [[ -f $HYPR/hyprland.lua ]]; then
+    log "wiring the island keybindings into hyprland.lua..."
+    if captured="$(bash "$ROOT/scripts/wire-shortcuts.sh" --apply 2>>"$STATE_DIR/wire-shortcuts.log")"; then
+      shortcut_state="$captured"
+      if [[ "$(jq -r '.createdByUs' <<<"$shortcut_state")" == true ]]; then
+        log "island keybindings enabled (managed block written to hyprland.lua)."
+      else
+        log "existing island keybinding block kept (left untouched)."
+      fi
+    else
+      log "island keybinding wiring failed; see $STATE_DIR/wire-shortcuts.log." >&2
+    fi
+  else
+    log "no hyprland.lua found; island keybindings left to the settings app."
+  fi
+else
+  log "shortcut setup skipped (--no-shortcuts)."
+fi
+
 # --------------------------------------------------------------- reconcile
 
 log "reconciling service state against the bar flag..."
@@ -232,9 +263,11 @@ jq -n \
   --argjson notifCloneCreated "$notif_clone_created" \
   --arg tideUserConfigPath "$tide_userconfig" \
   --argjson tideUserConfigSeeded "$( (( seed_tide_userconfig )) && echo true || echo false )" \
+  --argjson shortcutBinding "$shortcut_state" \
   '{ installer: $installer, installedAt: $installedAt,
      cliShims: $shims, configSeeded: $configSeeded,
      keybinding: { wired: $keyWired, module: $keyModule, hyprlandBackup: $hyprlandBackup },
+     shortcutBinding: $shortcutBinding,
      suppression: {
        osd: { before: $osdCloneBefore, after: $osdCloneAfter, createdByUs: $osdCloneCreated },
        notifications: { before: $notifCloneBefore, after: $notifCloneAfter, createdByUs: $notifCloneCreated }
@@ -300,6 +333,9 @@ Tide Island plugin is installed.
   bindings: SUPER + SHIFT + SPACE toggles the bar and Tide Island together.
   status:   omarchy-tide-island-status
   keybinding state: $( (( key_wired )) && echo "managed by $key_module" || echo "left to your bindings.lua/hyprland.lua" )
+  shortcuts: $( [[ "$(jq -r '.shortcutBinding.createdByUs' "$INSTALLED_FILE" 2>/dev/null)" == true ]] \
+                && echo "island keybindings written to hyprland.lua" \
+                || echo "left to your hyprland.lua / the Tide Island settings app" )
   config:   $CONFIG_TARGET
   reverse:  run uninstall.sh to undo every step above.
 SUMMARY

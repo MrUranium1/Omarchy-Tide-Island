@@ -33,6 +33,19 @@ Initial release.
   seeds `~/.config/tide-island/userconfig.json` once (Reserved Top Space 9, Top
   Margin 1, Background Transparency 100, island 36x140); existing configs are
   never overwritten and an untouched seed is removed on uninstall.
+- Seed the settings app's default shortcuts in that same one-time config: the
+  seed now carries the island keybindings (`SUPER + ALT +` H/J/T/M/C/P/N/A/O/V/D
+  for the island views, plus `SUPER + ALT + I` to toggle the island) with the
+  other app actions left disabled, so `tide-island-config-app` shows them as the
+  defaults for a fresh install while existing configs are untouched.
+- Apply those same island keybindings to `hyprland.lua` at install time
+  (`scripts/wire-shortcuts.sh`), written into the settings app's own managed
+  block, so the shortcuts are live on a fresh install without opening the
+  settings app. Idempotent and non-destructive: an existing block (app- or
+  user-made) is never duplicated or overwritten, and teardown removes a block
+  only when we created it and it is still byte-for-byte untouched — a block the
+  user or the settings app has since edited is kept. `install.sh --no-shortcuts`
+  opts out.
 - Removal now undoes itself however the plugin is removed: install notes a
   self-contained teardown outside the plugin dir, and removing `mehir.tide-island`
   (even via `omarchy plugin remove`, which has no uninstall hook) restores the

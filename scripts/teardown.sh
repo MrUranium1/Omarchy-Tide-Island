@@ -227,29 +227,68 @@ done <<<"$shim_names"
 
 if [[ $(jq -r '.keybinding.wired // false' <<<"$state" 2>/dev/null || echo false) == "true" ]]; then
   module="$(jq -r '.keybinding.module // empty' <<<"$state" 2>/dev/null || true)"
-  hyprland_backup="$(jq -r '.keybinding.hyprlandBackup // empty' <<<"$state" 2>/dev/null || true)"
   if [[ -n $module && -f $module ]]; then
     mkdir -p "$BACKUPS"
     cp "$module" "$BACKUPS/$TSTAMP.$(basename "$module")"
     rm -f "$module"
     log "removed $module (backup kept)."
   fi
-  if [[ -f $HYPR/hyprland.lua ]]; then
-    if [[ -n $hyprland_backup && -f $hyprland_backup ]]; then
-      mkdir -p "$BACKUPS"
-      cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland.lua"
-      cp "$hyprland_backup" "$HYPR/hyprland.lua"
-      log "restored $HYPR/hyprland.lua from backup."
-    elif grep -q 'hypr.tide-island' "$HYPR/hyprland.lua"; then
-      mkdir -p "$BACKUPS"
-      cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland.lua"
-      grep -v 'hypr.tide-island' "$HYPR/hyprland.lua" >"$HYPR/hyprland.lua.tmp"
-      mv "$HYPR/hyprland.lua.tmp" "$HYPR/hyprland.lua"
-      log "removed the tide-island require line from hyprland.lua."
-    fi
+  # Remove ONLY the require line we appended (surgically) instead of restoring the
+  # whole file from backup: the island shortcut block may live in the same file
+  # and may have been edited by the user or the settings app, so a whole-file
+  # restore could silently discard it.
+  if [[ -f $HYPR/hyprland.lua ]] && grep -q 'hypr\.tide-island' "$HYPR/hyprland.lua"; then
+    mkdir -p "$BACKUPS"
+    cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland.lua"
+    grep -v 'hypr\.tide-island' "$HYPR/hyprland.lua" >"$HYPR/hyprland.lua.tmp"
+    mv "$HYPR/hyprland.lua.tmp" "$HYPR/hyprland.lua"
+    log "removed the tide-island require line from hyprland.lua (rest untouched)."
   fi
 else
   log "no keybinding module was wired; leaving hypr config untouched."
+fi
+
+# ----------------------------------------------------------- island shortcuts
+
+# Remove the island shortcut block from hyprland.lua, but only when WE wrote it
+# (createdByUs) and it is still byte-for-byte what we wrote. A block the user or
+# the settings app has since edited is theirs and stays; a block that predated
+# the plugin is never touched.
+SHORTCUT_BEGIN="-- Tide Island shortcuts: begin (managed by Tide Island Config App)."
+SHORTCUT_END="-- Tide Island shortcuts: end."
+extract_shortcut_block() {
+  [[ -f $1 ]] || return 0
+  awk -v b="$SHORTCUT_BEGIN" -v e="$SHORTCUT_END" '
+    $0 == b { inb = 1 }
+    inb { print }
+    $0 == e { inb = 0 }
+  ' "$1"
+}
+if [[ $(jq -r '.shortcutBinding.createdByUs // false' <<<"$state" 2>/dev/null || echo false) == "true" ]]; then
+  sb_config="$(jq -r '.shortcutBinding.config // empty' <<<"$state" 2>/dev/null || true)"
+  [[ -n $sb_config ]] || sb_config="$HYPR/hyprland.lua"
+  sb_sha="$(jq -r '.shortcutBinding.blockSha256 // empty' <<<"$state" 2>/dev/null || true)"
+  cur_block="$(extract_shortcut_block "$sb_config")"
+  if [[ -z $cur_block ]]; then
+    log "no island shortcut block present in $sb_config; nothing to remove."
+  else
+    cur_sha="$(printf '%s\n' "$cur_block" | sha256sum | awk '{print $1}')"
+    if [[ -n $sb_sha && $cur_sha == "$sb_sha" ]]; then
+      mkdir -p "$BACKUPS"
+      cp "$sb_config" "$BACKUPS/$TSTAMP.hyprland.lua"
+      awk -v b="$SHORTCUT_BEGIN" -v e="$SHORTCUT_END" '
+        $0 == b { skip = 1; next }
+        skip && $0 == e { skip = 0; next }
+        !skip { print }
+      ' "$sb_config" >"$sb_config.tmp"
+      mv "$sb_config.tmp" "$sb_config"
+      log "removed our island shortcut block from $sb_config (backup kept)."
+    else
+      log "the island shortcut block in $sb_config was edited; leaving it untouched."
+    fi
+  fi
+else
+  log "no island shortcut block written by this plugin; leaving hypr config untouched."
 fi
 
 # ----------------------------------------------------------------- config

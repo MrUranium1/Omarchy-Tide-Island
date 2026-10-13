@@ -56,7 +56,8 @@ The first time the plugin loads it notices it is not set up yet and runs the
 whole setup by itself: it installs the bundled Tide Island into
 `~/.local/share/omarchy-tide-island` (no sudo), links `~/.local/bin/tide-island`,
 installs the user `tide-island.service`, adds the CLI shims, seeds the config,
-creates + patches the OSD/notification clones and wires the keybinding. The
+creates + patches the OSD/notification clones, wires the keybinding, and applies
+the island keybindings to `hyprland.lua`. The
 Tide Island **Settings** app is bundled too — open it from the app menu
 ("Tide Island Settings") or run `tide-island-config-app`. Then the island
 appears whenever the bar is hidden. On a machine with no Tide config yet, it
@@ -99,7 +100,14 @@ Either path does all of this, safely:
    a final mount-verification (`scripts/ensure-mount.sh`) bounces the shell's
    mounted plugin set and re-checks, so a watcher-driven reload that raced the
    patch never leaves the stand-down dormant until the next restart.
-6. Reconciles Tide Island against the current bar state.
+6. Applies the island keybindings to `hyprland.lua` via
+   `scripts/wire-shortcuts.sh`, written into the settings app's own managed
+   block so the island's `SUPER + ALT +` shortcuts (H/J/T/M/C/P/N/A/O/V/D for
+   the island views, I to toggle the island) are live on a fresh install
+   without opening the settings app. It is idempotent (an existing block is
+   never duplicated) and non-destructive (a block you or the app edited is left
+   alone); skip it with `install.sh --no-shortcuts`.
+7. Reconciles Tide Island against the current bar state.
 
 Note: standing down the built-in OSD/notification overlays uses Omarchy's own
 clone mechanism, so you see the standard "Editing Cloned Plugin" toast during
@@ -123,9 +131,10 @@ island):
    plugin notices its directory is gone and runs the self-contained teardown
    installed at `~/.local/lib/omarchy-tide-island/teardown.sh`, which removes
    the suppression clones it created, the CLI shims, the keybinding, the
-   bundled runtime and the recorded state. (`scripts/teardown.sh` is installed
-   *outside* the plugin directory precisely so it survives the plugin being
-   deleted.)
+   bundled runtime and the recorded state. (The island shortcut block it wrote
+   to `hyprland.lua` is removed too, but only while it is still untouched.)
+   (`scripts/teardown.sh` is installed *outside* the plugin directory precisely
+   so it survives the plugin being deleted.)
 2. **`bash uninstall.sh --remove-plugin --remove-runtime`** — from a checkout;
    logs what it backs up before removing. Add `--purge-config` to also delete
    the plugin config. A shutdown stand-down you already had *before* this
