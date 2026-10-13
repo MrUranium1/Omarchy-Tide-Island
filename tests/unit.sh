@@ -133,6 +133,49 @@ for pair in "omarchy.osd:patches/omarchy-osd-suppression.patch:Osd.qml" \
   rm -rf "$tmp/apply"
 done
 
+echo "  ensure-suppression state tracking (sandboxed HOME)"
+es_upstream="/usr/share/omarchy/shell/plugins/osd/Osd.qml"
+es="$tmp/es"
+mkdir -p "$es/bin" "$es/home/.config/omarchy/plugins/mehir.osd"
+cat >"$es/bin/omarchy-plugin-list" <<'EOS'
+#!/usr/bin/env bash
+echo '[{"id":"mehir.osd","firstParty":false,"clonedFrom":"omarchy.osd","enabled":true}]'
+EOS
+cat >"$es/bin/omarchy-shell" <<'EOS'
+#!/usr/bin/env bash
+exit 0
+EOS
+chmod +x "$es/bin/omarchy-plugin-list" "$es/bin/omarchy-shell"
+printf '{"entryPoints":{"panel":"Osd.qml"}}' >"$es/home/.config/omarchy/plugins/mehir.osd/manifest.json"
+es_osd="$es/home/.config/omarchy/plugins/mehir.osd/Osd.qml"
+es_state="$es/home/.local/state/omarchy/tide-island/patch-state/mehir.osd"
+es_backups="$es/home/.local/state/omarchy/tide-island/backups"
+run_es() { HOME="$es/home" PATH="$es/bin:$PATH" bash "$ROOT/scripts/ensure-suppression.sh" "$@"; }
+
+cp "$es_upstream" "$es_osd"
+run_es >/dev/null 2>&1 || true
+t "apply to a pristine clone patches it and records 'applied'"
+grep -q 'The bar-off marker' "$es_osd" && [[ "$(cat "$es_state" 2>/dev/null)" == applied ]] && ok || ko
+t "apply backs the pristine file up"
+[[ -n "$(ls -1 "$es_backups" 2>/dev/null)" ]] && ok || ko
+
+run_es --restore >/dev/null 2>&1 || true
+t "--restore undoes a patch we applied (back to pristine, state cleared)"
+cmp -s "$es_osd" "$es_upstream" && [[ ! -f $es_state ]] && ok || ko
+
+# Pre-existing suppression: patch the clone, then drop our state marker so the
+# clone looks like it was suppressed before the plugin ever ran.
+cp "$es_upstream" "$es_osd"
+(cd "$es/home/.config/omarchy/plugins/mehir.osd" && patch -p1 --no-backup-if-mismatch <"$ROOT/patches/omarchy-osd-suppression.patch" >/dev/null 2>&1)
+rm -f "$es_state"
+run_es >/dev/null 2>&1 || true
+t "apply on an already-patched clone records 'preexisting'"
+[[ "$(cat "$es_state" 2>/dev/null)" == preexisting ]] && ok || ko
+
+run_es --restore >/dev/null 2>&1 || true
+t "--restore leaves a pre-existing suppression untouched"
+grep -q 'The bar-off marker' "$es_osd" && ok || ko
+
 echo
 echo "unit: $pass passed, $fail failed"
 (( fail == 0 ))
