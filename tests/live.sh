@@ -22,13 +22,13 @@ runtest() { echo "  - $*"; }
 
 tide_pids() { pgrep -af 'quickshell -p .*tide-island' | wc -l || true; }
 
-wait_until() { # $1 = condition command string, $2 = description
+wait_until() { # $1 = single-quoted condition (evaluated each pass), $2 = description
   local deadline=$((SECONDS + 10))
   while (( SECONDS < deadline )); do
     if eval "$1" >/dev/null 2>&1; then return 0; fi
     sleep 0.25
   done
-  return 1
+  return 0 # callers assert the result; never abort the suite via errexit
 }
 
 restore_state() {
@@ -62,7 +62,7 @@ t0_active=$(systemctl --user is-active tide-island.service 2>/dev/null || echo u
 
 if (( t0_flag )); then
   "$TOGGLE"
-  wait_until "[[ ! -f $FLAG ]] && [[ \"$(systemctl --user is-active tide-island.service 2>/dev/null)\" == inactive ]]" "bar shown + service stopped"
+  wait_until '[[ ! -f "$FLAG" ]] && [[ "$(systemctl --user is-active tide-island.service 2>/dev/null)" == inactive ]]' "bar shown + service stopped"
   [[ ! -f $FLAG ]] && ok "toggle removed bar-off flag" || ko "flag still present"
   [[ $(systemctl --user is-active tide-island.service 2>/dev/null) == "inactive" ]] \
     && ok "service stopped with bar visible" || ko "service not stopped"
@@ -72,7 +72,7 @@ else
 fi
 
 "$TOGGLE" # <- back to hidden (Tide on)
-wait_until "[[ -f $FLAG ]] && [[ \"$(systemctl --user is-active tide-island.service 2>/dev/null)\" == active ]]" "bar hidden + service active"
+wait_until '[[ -f "$FLAG" ]] && [[ "$(systemctl --user is-active tide-island.service 2>/dev/null)" == active ]]' "bar hidden + service active"
 [[ -f $FLAG ]] && ok "toggle restored bar-off flag" || ko "flag missing after second toggle"
 [[ $(systemctl --user is-active tide-island.service 2>/dev/null) == "active" ]] \
   && ok "service active with bar hidden" || ko "service not active"
@@ -92,7 +92,7 @@ rm -f "$FLAG"
 systemctl --user stop tide-island.service 2>/dev/null || true
 sleep 1
 omarchy osd -i volume-high -p 66 -d 8000 >/dev/null 2>&1 || true
-wait_until "[[ \"$(omarchy-shell osd state 2>/dev/null || true)\" == open ]]" "osd open"
+wait_until '[[ "$(omarchy-shell osd state 2>/dev/null || true)" == open ]]' "osd open"
 [[ "$(omarchy-shell osd state 2>/dev/null || true)" == "open" ]] \
   && ok "OSD visible with bar visible" || ko "OSD not open"
 omarchy-shell osd close >/dev/null 2>&1 || true
@@ -106,7 +106,7 @@ before=$(ls "$HISTORY" 2>/dev/null | wc -l)
 notify-send -a tide-plugin-test live-suppressed "suppressed popup" >/dev/null 2>&1 || true
 sleep 1.2
 popups_during=$(ls "$POPUPS" 2>/dev/null | wc -l)
-wait_until "[[ $(ls "$HISTORY" 2>/dev/null | wc -l) -gt $before ]]" "history grows"
+wait_until '[[ $(ls "$HISTORY" 2>/dev/null | wc -l) -gt '"$before"' ]]' "history grows"
 after=$(ls "$HISTORY" 2>/dev/null | wc -l)
 [[ $popups_during -eq 0 ]] && ok "no popup while suppressed" || ko "popup(s) shown while suppressed ($popups_during)"
 [[ $after -gt $before ]] && ok "history recorded the suppressed notification (now $after)" || ko "history did not grow ($before -> $after)"
