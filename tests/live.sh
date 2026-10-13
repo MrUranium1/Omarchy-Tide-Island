@@ -111,18 +111,20 @@ echo "  E. notifications suppressed (history still recorded)"
 [[ -f $FLAG ]] || "$TOGGLE"
 wait_until '[[ "$(omarchy-shell tide-island status 2>/dev/null | jq -r .notificationsSuppression 2>/dev/null || true)" == "true" ]]' "notifications suppression on" 10
 tag="live-suppressed-$$"
-before=$(count_files "$HISTORY")
 notify-send -a tide-plugin-test "$tag" "suppressed popup" >/dev/null 2>&1 || true
 sleep 1.5
 popups_during=$(count_files "$POPUPS")
 # A suppressed toast never shows, but is archived to history when its own
-# expiry timer fires (normal urgency = 8s); allow a margin past that.
-wait_until '[[ $(count_files "$HISTORY") -gt '"$before"' ]]' "history grows" 16
-after=$(count_files "$HISTORY")
+# expiry timer fires (normal urgency = 8s). History is capped at 10 entries
+# (historyLimit), so assert the entry landed rather than that the count grew.
+wait_until 'grep -rlq "$tag" "$HISTORY" 2>/dev/null' "suppressed notification archived" 16
 [[ $popups_during -eq 0 ]] && ok "no popup while suppressed" || ko "popup(s) shown while suppressed ($popups_during)"
-[[ $after -gt $before ]] && ok "history recorded the suppressed notification (now $after)" || ko "history did not grow ($before -> $after)"
-grep -rlq "$tag" "$HISTORY" 2>/dev/null \
-  && ok "history entry tagged $tag" || ko "no $tag entry in history"
+newest="$(ls -t "$HISTORY" 2>/dev/null | head -1 || true)"
+if [[ -n $newest ]] && grep -q "$tag" "$HISTORY/$newest" 2>/dev/null; then
+  ok "history archived the suppressed notification (newest: $newest)"
+else
+  ko "suppressed notification missing from newest history entry"
+fi
 
 echo "  F. repeated rapid toggles stay consistent"
 for _ in 1 2 3 4; do "$TOGGLE"; sleep 0.3; done
