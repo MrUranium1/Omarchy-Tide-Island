@@ -19,7 +19,6 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PLUGIN_ID="mehir.tide-island"
-PLUGIN_DIR="$HOME/.config/omarchy/plugins/$PLUGIN_ID"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 BIN_TARGET="$HOME/.local/bin"
 CONFIG_TARGET="$HOME/.config/omarchy/tide-island.json"
@@ -32,17 +31,15 @@ TSTAMP="$(date +%Y%m%d-%H%M%S)"
 flag_keybinding=1
 flag_config=1
 flag_suppression=1
-flag_yes=""
 
 usage() {
   cat <<USAGE
-Usage: install.sh [--no-keybinding] [--no-config] [--no-suppression] [-y] [--help]
+Usage: install.sh [--no-keybinding] [--no-config] [--no-suppression] [--help]
 
   --no-keybinding    Skip wiring the SUPER + SHIFT + SPACE binding. Requires a
                      separate line in hyprland.lua to load hypr/tide-island.lua.
   --no-config        Do not seed ~/.config/omarchy/tide-island.json.
   --no-suppression   Do not patch/clone the OSD and notifications plugins.
-  -y, --yes          Do not ask before reparative steps.
   --help             Show this help.
 USAGE
 }
@@ -52,7 +49,6 @@ while (( $# )); do
     --no-keybinding) flag_keybinding=0 ;;
     --no-config) flag_config=0 ;;
     --no-suppression) flag_suppression=0 ;;
-    -y | --yes) flag_yes=1 ;;
     -h | --help) usage && exit 0 ;;
     *) usage >&2 && exit 2 ;;
   esac

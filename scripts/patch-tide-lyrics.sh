@@ -70,7 +70,6 @@ if [[ ! -f $file ]]; then
 fi
 
 if [[ $mode == "restore" ]]; then
-  local backup
   backup="$(ls -1t "$BACKUP_ROOT"/*.$(basename "$dir").lyrics 2>/dev/null | head -1 || true)"
   if [[ -n $backup ]]; then
     cp "$backup" "$file"
@@ -96,7 +95,6 @@ if [[ ! -w $dir ]]; then
 fi
 
 mkdir -p "$BACKUP_ROOT"
-local backup
 backup="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S).$(basename "$dir").lyrics"
 cp "$file" "$backup"
 log "backed up $file -> $backup"

@@ -8,7 +8,6 @@
 
 set -Eeuo pipefail
 
-PLUGIN_ID="mehir.tide-island"
 IPC_TARGET="tide-island"
 FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
 

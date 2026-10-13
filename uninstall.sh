@@ -61,7 +61,7 @@ fi
 mkdir -p "$BACKUPS"
 while IFS= read -r name; do
   [[ -z $name ]] && continue
-  local dest="$BIN_TARGET/$name"
+  dest="$BIN_TARGET/$name"
   if [[ -f $dest ]]; then
     cp "$dest" "$BACKUPS/$TSTAMP.$name"
     rm -f "$dest"
@@ -76,7 +76,6 @@ bash "$ROOT/scripts/ensure-suppression.sh" --restore
 
 if (( flag_remove_plugin )); then
   for role in osd notifications; do
-    local before after created
     before="$(jq -r --arg r "$role" ".suppression.$role.before // empty" <<<"$state" || true)"
     after="$(jq -r --arg r "$role" ".suppression.$role.after // empty" <<<"$state" || true)"
     created="$(jq -r --arg r "$role" ".suppression.$role.createdByUs // false" <<<"$state" || true)"
@@ -86,10 +85,10 @@ if (( flag_remove_plugin )); then
         && log "removed clone '$after' (was created by install.sh)." \
         || log "could not remove clone '$after' (shell down?); removing directory." >&2
       if [[ -e $PLUGINS_DIR/$after && ! -L $PLUGINS_DIR/$after ]]; then
-        rm -rf "$PLUGINS_DIR/$after"
+        rm -rf "${PLUGINS_DIR:?}/$after"
         log "removed directory $PLUGINS_DIR/$after"
       fi
-    elif [[ -n $after && -z $before/ ]]; then
+    elif [[ -n $after && -z $before ]]; then
       log "clone '$after' predates the plugin; left in place (de-patched above)."
     fi
   done
@@ -98,7 +97,6 @@ fi
 # ------------------------------------------------------------- keybinding
 
 if [[ $(jq -r '.keybinding.wired // false' <<<"$state") == "true" ]]; then
-  local module hyprland_backup
   module="$(jq -r '.keybinding.module // empty' <<<"$state" || true)"
   hyprland_backup="$(jq -r '.keybinding.hyprlandBackup // empty' <<<"$state" || true)"
   if [[ -n $module && -f $module ]]; then
@@ -135,10 +133,11 @@ fi
 # ------------------------------------------------------------------ plugin
 
 if (( flag_remove_plugin )); then
-  omarchy plugin remove "$PLUGIN_ID" --yes 2>/dev/null \
-    && log "removed plugin '$PLUGIN_ID'." \
-    || log "could not remove the plugin via omarchy (shell down?); its files remain at"
-      log "  $PLUGIN_DIR"
+  if omarchy plugin remove "$PLUGIN_ID" --yes 2>/dev/null; then
+    log "removed plugin '$PLUGIN_ID'."
+  else
+    log "could not remove the plugin via omarchy (shell down?); its files remain at $PLUGIN_DIR"
+  fi
 else
   log "kept the plugin '$PLUGIN_ID' itself (disable anytime: omarchy plugin rm $PLUGIN_ID --yes)."
 fi
