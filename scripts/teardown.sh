@@ -304,6 +304,17 @@ fi
 
 resync_shell
 
+# --------------------------------------------------------------- marker
+
+# The setup-complete marker is transient: it certifies that THIS install
+# finished. Clear it on removal so re-adding the plugin runs setup again rather
+# than trusting a stale marker and silently leaving the OSD/notification
+# stand-down unapplied.
+if [[ -f $STATE_DIR/auto-setup.done ]]; then
+  rm -f "$STATE_DIR/auto-setup.done"
+  log "cleared the setup-complete marker so a re-add sets up again."
+fi
+
 # ------------------------------------------------------------------- final
 
 if (( opt_final )); then

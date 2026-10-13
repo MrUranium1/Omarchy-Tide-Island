@@ -30,6 +30,12 @@ Item {
         Qt.resolvedUrl("scripts/tide-sync.sh").toString().replace("file://", "")
     readonly property string setupScript:
         Qt.resolvedUrl("scripts/plugin-setup.sh").toString().replace("file://", "")
+    // Detached mount-verify: bounces the shell's mounted plugin set after the
+    // OSD/notifications clones are patched, so the patched clones are the ones
+    // serving at runtime (not on the next shell boot). Runs detached because
+    // the reload it triggers recreates this very service.
+    readonly property string ensureMountScript:
+        Qt.resolvedUrl("scripts/ensure-mount.sh").toString().replace("file://", "")
     readonly property string launchTerminal:
         (omarchyPath !== "" ? omarchyPath : "/usr/share/omarchy") + "/bin/omarchy-launch-terminal"
     readonly property string pluginDir:
@@ -129,8 +135,12 @@ Item {
             "command -v tide-island >/dev/null 2>&1 && echo tide-installed=yes || echo tide-installed=no; " +
             "systemctl --user is-active tide-island.service 2>/dev/null || echo inactive; " +
             "command -v omarchy-tide-island-toggle >/dev/null 2>&1 && echo cli=yes || echo cli=no; " +
-            "grep -rl --include=Osd.qml 'The bar-off marker' \"$HOME/.config/omarchy/plugins\" 2>/dev/null | head -1 | grep -q . && echo osd-suppressed=yes || echo osd-suppressed=no; " +
-            "grep -rl --include=Service.qml 'popupsSuppressed' \"$HOME/.config/omarchy/plugins\" 2>/dev/null | head -1 | grep -q . && echo notifications-suppressed=yes || echo notifications-suppressed=no"]
+            // Suppression is *live* only when the instance serving the OSD and
+            // notification IPC is the patched clone (it exposes syncSuppression,
+            // which no built-in has) AND the on-disk markers exist. The mount can
+            // lag the patch, so file-only checks lie; this is the runtime truth.
+            "( omarchy-shell osd syncSuppression >/dev/null 2>&1 && grep -rq --include=Osd.qml 'The bar-off marker' \"$HOME/.config/omarchy/plugins\" 2>/dev/null && echo osd-suppressed=yes ) || echo osd-suppressed=no; " +
+            "( omarchy-shell notifications syncSuppression >/dev/null 2>&1 && grep -rq --include=Service.qml 'popupsSuppressed' \"$HOME/.config/omarchy/plugins\" 2>/dev/null && echo notifications-suppressed=yes ) || echo notifications-suppressed=no"]
         stdout: SplitParser { onRead: (line) => plugin.applyProbe(String(line).trim()) }
     }
     FileView {
@@ -200,8 +210,12 @@ Item {
 
     // Auto-setup on first load: a freshly added plugin installs the bundled
     // runtime, CLI shims and OSD/notification stand-down once, silently, so
-    // adding the plugin is enough. A marker file makes it a one-time action;
-    // re-run manually any time with `omarchy-shell tide-island setup`.
+    // adding the plugin is enough. The setup-complete marker is written by the
+    // detached ensure-mount step only once the patched OSD/notifications clones
+    // are actually SERVING at runtime (not merely present on disk), so an
+    // install whose popups are still handled by the old code retries on the
+    // next shell start. Re-run manually any time with `omarchy-shell
+    // tide-island setup`.
     property bool autoSetupTried: false
     readonly property string autoSetupMarker:
         home + "/.local/state/omarchy/tide-island/auto-setup.done"
@@ -223,17 +237,13 @@ Item {
         id: autoSetupProc
         command: ["bash", plugin.setupScript, "--auto"]
         onExited: (code) => {
-            console.log("tide-island: auto-setup finished (exit " + code + ")")
-            markerWrite.running = true
+            if (code === 0) {
+                console.log("tide-island: auto-setup finished (exit 0); the detached mount-verify writes the setup marker once the patched clones serve at runtime.")
+            } else {
+                console.warn("tide-island: auto-setup FAILED (exit " + code + "); the setup marker was not written, so it will retry on the next shell start.")
+            }
             plugin.refreshStatus()
         }
-    }
-    Process {
-        id: markerWrite
-        running: false
-        command: ["bash", "-c",
-            "d=$(dirname \"$1\"); mkdir -p \"$d\"; touch \"$1\"", "--",
-            plugin.autoSetupMarker]
     }
     Timer {
         id: autoSetupDelay

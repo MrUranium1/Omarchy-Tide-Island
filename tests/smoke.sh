@@ -36,7 +36,7 @@ for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json"
          "install.sh" "uninstall.sh" \
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
-         "scripts/teardown.sh" \
+         "scripts/ensure-mount.sh" "scripts/teardown.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
@@ -91,6 +91,15 @@ rc=0
 timeout 5 "$ROOT/scripts/patch-tide-lyrics.sh" --restore --dir "$tmp/absent" >/dev/null 2>&1 || rc=$?
 [[ $rc -eq 1 ]] && t "patch-tide-lyrics.sh --restore fails fast on a missing tree" && ok \
   || { t "patch-tide-lyrics.sh --restore rc=$rc (expected 1; 124 = hung)" && ko; }
+
+echo "  ensure-mount.sh contract"
+if timeout 5 "$ROOT/scripts/ensure-mount.sh" --help >/dev/null 2>&1; then
+  t "ensure-mount.sh --help exits 0" && ok
+else
+  t "ensure-mount.sh --help did not exit cleanly" && ko
+fi
+grep -q 'syncSuppression' "$ROOT/scripts/ensure-mount.sh" \
+  && t "ensure-mount verifies the mount over the shell IPC" && ok || ko
 
 echo "  omarchy validates the plugin folder"
 if (cd "$ROOT" && omarchy plugin validate . >/dev/null 2>&1); then

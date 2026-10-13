@@ -94,7 +94,18 @@ Either path does all of this, safely:
    handles it, your config is left untouched. On a fresh machine it installs
    `packaging/hyprland-tide-island.lua` into `~/.config/hypr/` and adds one
    `require_optional` line to `hyprland.lua`.
-5. Reconciles Tide Island against the current bar state.
+5. Ensures the patched clones actually serve right away. Setup is only marked
+   complete once the OSD/notifications clones report live over the shell IPC:
+   a final mount-verification (`scripts/ensure-mount.sh`) bounces the shell's
+   mounted plugin set and re-checks, so a watcher-driven reload that raced the
+   patch never leaves the stand-down dormant until the next restart.
+6. Reconciles Tide Island against the current bar state.
+
+Note: standing down the built-in OSD/notification overlays uses Omarchy's own
+clone mechanism, so you see the standard "Editing Cloned Plugin" toast during
+setup — that is Omarchy confirming it created a clone for customization. It is
+expected, not an error, and Omarchy's behaviour is left unchanged; install
+follows it with an explainer notification.
 
 Everything is recorded in `~/.local/state/omarchy/tide-island/installed.json`.
 Repeat `install.sh` to repair; `uninstall.sh` reverses it (nothing user-created

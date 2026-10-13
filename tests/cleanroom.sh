@@ -73,7 +73,40 @@ fi
 exit 0
 EOS
 
-printf '#!/usr/bin/env bash\nexit 0\n' >"$BIN/omarchy-shell"
+# Model the running Omarchy shell's MOUNTED plugin set: a plugin only serves
+# when mount-state names it (as the real shell mounts instances at boot/reload).
+# shell rescanPlugins re-derives the mounted set from the enabled patched clones
+# (exactly what the real reload does once every file is in place), and
+# osd/notifications syncSuppression "succeed" only when the PATCHEd clone is
+# serving — mirroring the real IPC (first-party plugins have no syncSuppression).
+# Pre-seed mount-state at first-party so an install that forgets to bounce
+# leaves popups served by the OLD code (the reported bug) and the fix must flip
+# it.
+cat >"$BIN/omarchy-shell" <<'EOS'
+#!/usr/bin/env bash
+d="$HOME/.config/omarchy/plugins"
+st="$HOME/.local/state/omarchy/tide-island/mount-state"
+mkdir -p "$(dirname "$st")"
+if [[ ! -f $st ]]; then
+  printf 'osd=omarchy.osd notifications=omarchy.notifications\n' >"$st"
+fi
+if [[ ${1:-} == shell && ${2:-} == rescanPlugins ]]; then
+  osd_marker=0; notif_marker=0
+  [[ -f "$d/mehir.osd/Osd.qml" ]] && grep -q 'The bar-off marker' "$d/mehir.osd/Osd.qml" && osd_marker=1
+  [[ -f "$d/mehir.notifications/Service.qml" ]] && grep -q 'popupsSuppressed' "$d/mehir.notifications/Service.qml" && notif_marker=1
+  printf 'osd=%s notifications=%s\n' \
+    "$([[ $osd_marker == 1 ]] && echo mehir.osd || echo omarchy.osd)" \
+    "$([[ $notif_marker == 1 ]] && echo mehir.notifications || echo omarchy.notifications)" >"$st"
+  exit 0
+fi
+if [[ ${1:-} == osd && ${2:-} == syncSuppression ]]; then
+  grep -qw 'osd=mehir.osd' "$st" && exit 0 || exit 1
+fi
+if [[ ${1:-} == notifications && ${2:-} == syncSuppression ]]; then
+  grep -qw 'notifications=mehir.notifications' "$st" && exit 0 || exit 1
+fi
+exit 0
+EOS
 
 cat >"$BIN/systemctl" <<'EOS'
 #!/usr/bin/env bash
@@ -100,6 +133,14 @@ CONFIG="$HOME/.config/omarchy/tide-island.json"
 TIDE_USERCONFIG="$HOME/.config/tide-island/userconfig.json"
 FLAG="$HOME/.local/state/omarchy/toggles/bar-off"
 svc() { cat "$HOME/.local/state/omarchy/fake-systemd/tide-island.service" 2>/dev/null || echo inactive; }
+wait_marker() { # $1 = timeout seconds
+  local end=$((SECONDS + ${1:-20}))
+  while (( SECONDS < end )); do
+    [[ -f "$STATE/auto-setup.done" ]] && return 0
+    sleep 0.2
+  done
+  return 1
+}
 
 echo "tide-island clean-room lifecycle test ($SB)"
 echo "  fresh install"
@@ -219,6 +260,69 @@ grep -rq 'The bar-off marker\|popupsSuppressed' "$PLUGINS" 2>/dev/null \
   && ko "suppression survived the state-less reap" || ok "suppression fully undone without state"
 [[ ! -e "$STATE" && ! -e "$HOME/.local/lib/omarchy-tide-island" ]] \
   && ok "state + helper reclaimed by state-less reap" || ko "reap leftovers remain"
+
+echo "  removal without --final clears the setup marker so a re-add sets up again"
+(cd "$ROOT" && bash install.sh) >"$SB/i7.log" 2>&1 && ok "install before marker-clear test exits 0" || { ko "install failed"; tail -n20 "$SB/i7.log"; }
+if wait_marker 30; then
+  ok "setup marker written after install"
+else
+  ko "no setup marker after install"
+fi
+mkdir -p "$PLUGINS/mehir.tide-island"
+rm -rf "$PLUGINS/mehir.tide-island" # simulate the plugin directory being removed
+bash "$HELPER" --remove-clones --if-plugin-gone >"$SB/reap3.log" 2>&1 \
+  && ok "teardown without --final exits 0" || { ko "teardown failed"; tail -n20 "$SB/reap3.log"; }
+[[ ! -f "$STATE/auto-setup.done" ]] \
+  && ok "setup marker cleared on removal (a re-add will set up again)" || ko "stale marker would skip setup on re-add"
+[[ -d "$STATE" ]] && ok "state (backups) retained when --final is not passed" || ko "state wrongly wiped without --final"
+
+echo "  mount-verify self-heals an install whose runtime served the old code (problem 1)"
+# The reported bug: clones are patched on disk and enabled in config, but the
+# RUNNING shell still serves the unpatched first-party OSD/notifications (its
+# plugin watch reloaded while the patch was still being applied). On this model
+# mount-state says omarchy.*; the on-disk markers say suppressed. Install must
+# detect the gap through the runtime IPC and bounce the mounted set, then only
+# mark setup complete.
+mkdir -p "$STATE"
+printf 'osd=omarchy.osd notifications=omarchy.notifications\n' >"$STATE/mount-state"
+rm -f "$STATE/auto-setup.done"
+if omarchy-shell osd syncSuppression >/dev/null 2>&1; then
+  ko "pre-check: osd runtime reported suppressed before the bounce"
+else
+  ok "pre-check: osd runtime is the unpatched build (bug modelled)"
+fi
+(cd "$ROOT" && bash install.sh) >"$SB/i6.log" 2>&1 && ok "install exits 0" || { ko "install failed"; tail -n20 "$SB/i6.log"; }
+if wait_marker 30; then
+  ok "setup marker written only once the patched clones serve"
+else
+  ko "setup marker never written (mount-verify did not fix the runtime)"
+fi
+grep -qw 'osd=mehir.osd' "$STATE/mount-state" && ok "osd runtime switched to the patched clone" || ko "osd runtime still unpatched"
+grep -qw 'notifications=mehir.notifications' "$STATE/mount-state" && ok "notifications runtime switched to the patched clone" || ko "notifications runtime still unpatched"
+grep -Eq 'serving at runtime|no bounce needed' "$STATE/ensure-mount.log" 2>/dev/null && ok "mount-verify logged the successful outcome" || ko "no mount-verify log"
+
+echo "  ensure-mount.sh repairs a runtime stuck at first-party without a reinstall"
+printf 'osd=omarchy.osd notifications=omarchy.notifications\n' >"$STATE/mount-state"
+rm -f "$STATE/auto-setup.done"
+TMP_MARKER="$SB/mount-ok.marker"
+(cd "$ROOT" && bash scripts/ensure-mount.sh --marker "$TMP_MARKER") >"$SB/mount-ok.log" 2>&1 \
+  && ok "ensure-mount exits 0" || { ko "ensure-mount failed"; cat "$SB/mount-ok.log"; }
+[[ -f "$TMP_MARKER" ]] && ok "ensure-mount wrote the marker on success" || ko "marker not written on success"
+grep -qw 'osd=mehir.osd' "$STATE/mount-state" && ok "osd repaired to the patched clone" || ko "osd not repaired"
+
+echo "  ensure-mount.sh fails loudly and markerless when the patched clone cannot serve"
+printf 'osd=omarchy.osd notifications=omarchy.notifications\n' >"$STATE/mount-state"
+rm -f "$STATE/auto-setup.done" "$TMP_MARKER"
+cp "$PLUGINS/mehir.osd/Osd.qml" "$SB/osd.backup.qml"
+sed -i '/The bar-off marker/d' "$PLUGINS/mehir.osd/Osd.qml"
+if (cd "$ROOT" && bash scripts/ensure-mount.sh --marker "$TMP_MARKER") >"$SB/mount-fail.log" 2>&1; then
+  ko "ensure-mount reported success with an unpatchable OSD"
+else
+  ok "ensure-mount fails loudly when the patched clone cannot serve"
+fi
+[[ -f "$TMP_MARKER" ]] && ko "marker written despite failure" || ok "no marker on failure"
+grep -q 'FAILED' "$STATE/ensure-mount.log" 2>/dev/null && ok "failure state logged for diagnosis" || ko "no failure log"
+mv "$SB/osd.backup.qml" "$PLUGINS/mehir.osd/Osd.qml"
 
 echo
 echo "cleanroom: $pass passed, $fail failed"

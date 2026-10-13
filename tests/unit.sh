@@ -208,6 +208,58 @@ run_ir >/dev/null 2>&1
 t "never clobbers a foreign (non-managed) unit"
 grep -q 'FOREIGN UNIT' "$ir/home/.config/systemd/user/tide-island.service" && ok || ko
 
+echo "  ensure-mount.sh mount enforcement (problem 1 fix)"
+EM="$ROOT/scripts/ensure-mount.sh"
+umk() { # $1 = HOME subtree; builds sandbox omarchy-shell + patched clone files
+  local uh="$1"
+  mkdir -p "$uh/.local/state/omarchy/tide-island" \
+    "$uh/.config/omarchy/plugins/mehir.osd" \
+    "$uh/.config/omarchy/plugins/mehir.notifications"
+  printf '// The bar-off marker\n' >"$uh/.config/omarchy/plugins/mehir.osd/Osd.qml"
+  printf '// popupsSuppressed\n' >"$uh/.config/omarchy/plugins/mehir.notifications/Service.qml"
+  cat >"$tmp/bin/omarchy-shell" <<'EOS'
+#!/usr/bin/env bash
+st="$HOME/.local/state/omarchy/tide-island/mount-state"
+mkdir -p "$(dirname "$st")"
+if [[ ${1:-} == shell && ${2:-} == rescanPlugins ]]; then
+  d="$HOME/.config/omarchy/plugins"
+  osd=0; notif=0
+  [[ -f "$d/mehir.osd/Osd.qml" ]] && grep -q 'The bar-off marker' "$d/mehir.osd/Osd.qml" && osd=1
+  [[ -f "$d/mehir.notifications/Service.qml" ]] && grep -q 'popupsSuppressed' "$d/mehir.notifications/Service.qml" && notif=1
+  printf 'osd=%s notifications=%s\n' "$([[ $osd == 1 ]] && echo mehir.osd || echo omarchy.osd)" \
+    "$([[ $notif == 1 ]] && echo mehir.notifications || echo omarchy.notifications)" >"$st"
+  exit 0
+fi
+[[ ${1:-} == osd && ${2:-} == syncSuppression ]] && { grep -qw 'osd=mehir.osd' "$st" && exit 0 || exit 1; }
+[[ ${1:-} == notifications && ${2:-} == syncSuppression ]] && { grep -qw 'notifications=mehir.notifications' "$st" && exit 0 || exit 1; }
+exit 0
+EOS
+  chmod +x "$tmp/bin/omarchy-shell"
+}
+mstate() { printf 'osd=%s notifications=%s\n' "$1" "$2" >"$tmp/uh/.local/state/omarchy/tide-island/mount-state"; }
+mkdir -p "$tmp/bin"
+umk "$tmp/uh"
+mstate "mehir.osd" "mehir.notifications"
+HOME="$tmp/uh" PATH="$tmp/bin:$PATH" bash "$EM" --marker "$tmp/m1.marker" >/dev/null 2>&1
+t "no bounce needed when the patched clones already serve"
+[[ -f "$tmp/m1.marker" ]] && ok || ko
+
+mstate "omarchy.osd" "omarchy.notifications"
+HOME="$tmp/uh" PATH="$tmp/bin:$PATH" bash "$EM" --marker "$tmp/m2.marker" >/dev/null 2>&1
+t "bounces rescan and mounts the patched clones when the runtime lags (problem 1 repro)"
+[[ -f "$tmp/m2.marker" ]] && ok || ko
+grep -qw 'osd=mehir.osd' "$tmp/uh/.local/state/omarchy/tide-island/mount-state" && ok || ko
+grep -qw 'notifications=mehir.notifications' "$tmp/uh/.local/state/omarchy/tide-island/mount-state" && ok || ko
+
+sed -i '/The bar-off marker/d' "$tmp/uh/.config/omarchy/plugins/mehir.osd/Osd.qml"
+mstate "omarchy.osd" "omarchy.notifications"
+rc=0
+HOME="$tmp/uh" PATH="$tmp/bin:$PATH" bash "$EM" --marker "$tmp/m3.marker" >/dev/null 2>&1 || rc=$?
+t "fails loudly and leaves no marker when the patched clone cannot serve"
+[[ $rc -eq 1 ]] && ok || ko
+[[ ! -e "$tmp/m3.marker" ]] && ok || ko
+grep -q 'FAILED' "$tmp/uh/.local/state/omarchy/tide-island/ensure-mount.log" 2>/dev/null && ok || ko
+
 echo
 echo "unit: $pass passed, $fail failed"
 (( fail == 0 ))

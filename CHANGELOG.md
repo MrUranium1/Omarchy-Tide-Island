@@ -41,3 +41,24 @@ Initial release.
   `uninstall.sh` is now a thin wrapper over `scripts/teardown.sh` (backups and
   the pre-existing-stand-down rule are unchanged).
 - Clean-room lifecycle test (`tests/cleanroom.sh`).
+- Install no longer trusts disk markers: setup is marked complete only after the
+  patched OSD/notifications clones are actually serving at runtime. When the
+  shell's plugin watcher reloads the mounted set while the patch is still being
+  applied, a final mount-verification (`scripts/ensure-mount.sh`) bounces the
+  set (`shell rescanPlugins`), verifies over the shell IPC (patched clones
+  expose `syncSuppression`; first-party code does not), and only then writes
+  the auto-setup marker — failures are logged with remedies and retried on the
+  next shell start.
+- `Service.qml` probes suppression over the runtime IPC as well as the files,
+  so reported stand-down state tracks what is actually mounted.
+- Removal now clears the transient setup-complete marker even when state is
+  kept (e.g. `uninstall.sh` without `--final`), so re-adding the plugin runs
+  setup again instead of trusting a stale marker and silently skipping the
+  OSD/notification stand-down.
+- The "Editing Cloned Plugin" toast seen during setup is Omarchy's own clone
+  confirmation (from `omarchy plugin clone`), not an error; install adds an
+  explainer notification so the silent set-up stays comprehensible.
+- Regression tests: unit, smoke and clean-room suites now cover the mount
+  bounce — self-heal of an install that raced the patch, repair of a runtime
+  stuck at first-party, and a loud failure that leaves no "done" marker when
+  the patched clone cannot serve.

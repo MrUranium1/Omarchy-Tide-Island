@@ -244,8 +244,52 @@ jq -n \
     }
 log "wrote $INSTALLED_FILE"
 
+# ---------------------------------- explain the clone hand-over (one time)
+
+# Omarchy itself shows "Editing Cloned Plugin" when the clone step replaces the
+# built-in (that is its supported clone workflow's confirmation). Explain what
+# actually happened so nobody is confused by it. Sent only when THIS run created
+# the clones, so a repair re-run stays quiet.
+if (( flag_suppression )) && [[ "$(jq -r '.suppression.osd.createdByUs // false' "$INSTALLED_FILE" 2>/dev/null)" == true ]]; then
+  if command -v omarchy-notification-send >/dev/null 2>&1; then
+    omarchy-notification-send --app-name "Tide Island" \
+      "Tide Island now owns the OSD and notification popups" \
+      "Volume/display OSD and notification toasts now come from the My OSD and My Notifications clones while the island is on; removing the plugin restores Omarchy's originals. The two 'Editing Cloned Plugin' toasts are Omarchy's own clone confirmation." \
+      >/dev/null 2>&1 || true
+  fi
+fi
+
+# ------------------------------------------------- mount (problem 1 fix)
+
+# The OSD/notifications clones are patched on disk and enabled in config, but
+# the RUNNING shell may have mounted them before the patch landed (its plugin
+# watch reloads mid-clone), leaving unpatched code serving the popups. Resolve
+# this by bouncing the mounted set in a DETACHED process — the reload it
+# triggers unmounts and recreates this plugin's own shell service, so the
+# bounce must not be its child — and let it verify, over the shell IPC, that
+# the patched clones are the ones serving now. It (and only it) writes the
+# auto-setup marker, so "setup done" means "suppression actually live".
+if (( flag_suppression )); then
+  if [[ -x $ROOT/scripts/ensure-mount.sh ]]; then
+    log "making the patched OSD/notifications clones serve at runtime (detached verify)..."
+    # Delay one second first so install.sh (and the caller's QML process) can
+    # finish printing/returning before its own reload recreates the service.
+    ( sleep 1; setsid nohup bash "$ROOT/scripts/ensure-mount.sh" --marker "$STATE_DIR/auto-setup.done" \
+        >/dev/null 2>&1 </dev/null ) &
+    disown 2>/dev/null || true
+  else
+    log "ensure-mount.sh missing; suppression takes effect on the next shell restart." >&2
+  fi
+else
+  # Opted out of suppression: still mark setup finished so a later auto-setup
+  # does not silently re-enable what --no-suppression disabled.
+  mkdir -p "$STATE_DIR"
+  touch "$STATE_DIR/auto-setup.done"
+fi
+
 # ---------------------------------------------------------------- shell sync
 
+# Nudge the running plugin (if any) to refresh its status and reconcile now.
 omarchy-shell -q tide-island refresh 2>/dev/null || true
 
 # ------------------------------------------------------------------- summary
