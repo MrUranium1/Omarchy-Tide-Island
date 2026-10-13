@@ -55,8 +55,8 @@ log() { printf 'patch-tide-lyrics: %s\n' "$*"; }
 
 while (( $# )); do
   case "$1" in
-    --dir) tide_dir="$2" && shift 2 ;;
-    --restore) mode="restore" ;;
+    --dir) tide_dir="${2:-}" && shift 2 ;;
+    --restore) mode="restore" && shift ;;
     -h | --help) usage && exit 0 ;;
     *) usage >&2 && exit 2 ;;
   esac
@@ -74,8 +74,8 @@ if [[ $mode == "restore" ]]; then
   if [[ -n $backup ]]; then
     cp "$backup" "$file"
     log "restored $file from backup."
-  elif patch -p1 -R --dry-run -d "$dir" <"$PATCH" >/dev/null 2>&1; then
-    patch -p1 -R -d "$dir" <"$PATCH" >/dev/null
+  elif patch -p1 -R --batch --dry-run -d "$dir" <"$PATCH" >/dev/null 2>&1; then
+    patch -p1 -R --batch -d "$dir" <"$PATCH" >/dev/null
     log "reverted patch in $file."
   else
     log "nothing to restore for $dir."
@@ -99,7 +99,7 @@ backup="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S).$(basename "$dir").lyrics"
 cp "$file" "$backup"
 log "backed up $file -> $backup"
 
-if patch -p1 -d "$dir" <"$PATCH"; then
+if patch -p1 --batch -d "$dir" <"$PATCH"; then
   log "patched $file (album cover art removed from swipe lyrics)."
 else
   log "patching failed; restoring backup." >&2

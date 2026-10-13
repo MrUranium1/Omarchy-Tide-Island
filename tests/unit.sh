@@ -120,12 +120,12 @@ for pair in "omarchy.osd:patches/omarchy-osd-suppression.patch:Osd.qml" \
   IFS=: read -r src relpatch entry < <(printf '%s\n' "$pair")
   mkdir -p "$tmp/apply"
   cp "/usr/share/omarchy/shell/plugins/${src#omarchy.}/$entry" "$tmp/apply/$entry"
-  if (cd "$tmp/apply" && patch -p1 --no-backup-if-mismatch <"$ROOT/$relpatch" >/dev/null 2>&1); then
+  if (cd "$tmp/apply" && patch -p1 --batch --no-backup-if-mismatch <"$ROOT/$relpatch" >/dev/null 2>&1); then
     t "$relpatch applies to pristine file" && ok
   else
     t "$relpatch FAILED to apply to pristine file" && ko
   fi
-  if (cd "$tmp/apply" && patch -p1 -R --dry-run <"$ROOT/$relpatch" >/dev/null 2>&1); then
+  if (cd "$tmp/apply" && patch -p1 --batch -R --dry-run <"$ROOT/$relpatch" >/dev/null 2>&1); then
     t "$relpatch reverse-applies cleanly" && ok
   else
     t "$relpatch FAILED reverse-apply" && ko
@@ -166,7 +166,7 @@ cmp -s "$es_osd" "$es_upstream" && [[ ! -f $es_state ]] && ok || ko
 # Pre-existing suppression: patch the clone, then drop our state marker so the
 # clone looks like it was suppressed before the plugin ever ran.
 cp "$es_upstream" "$es_osd"
-(cd "$es/home/.config/omarchy/plugins/mehir.osd" && patch -p1 --no-backup-if-mismatch <"$ROOT/patches/omarchy-osd-suppression.patch" >/dev/null 2>&1)
+(cd "$es/home/.config/omarchy/plugins/mehir.osd" && patch -p1 --batch --no-backup-if-mismatch <"$ROOT/patches/omarchy-osd-suppression.patch" >/dev/null 2>&1)
 rm -f "$es_state"
 run_es >/dev/null 2>&1 || true
 t "apply on an already-patched clone records 'preexisting'"

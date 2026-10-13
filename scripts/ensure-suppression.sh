@@ -138,7 +138,7 @@ apply_to_role() {
   cp "$file" "$backup"
   log "backed up $file -> $backup"
 
-  if patch -p1 --no-backup-if-mismatch -d "$PLUGINS_DIR/$id" <"$patch"; then
+  if patch -p1 --batch --no-backup-if-mismatch -d "$PLUGINS_DIR/$id" <"$patch"; then
     record_state "$id" applied
     log "patched $id."
   else
@@ -193,8 +193,8 @@ restore_role() {
   fi
 
   # 3) Reverse-apply only our hunks. Co-existing user edits survive.
-  if [[ -f "$patch" ]] && patch -p1 -R --dry-run -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null 2>&1; then
-    patch -p1 -R -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null
+  if [[ -f "$patch" ]] && patch -p1 -R --batch --dry-run -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null 2>&1; then
+    patch -p1 -R --batch -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null
     clear_state "$id"
     log "reverted suppression patch in $id."
     return 0

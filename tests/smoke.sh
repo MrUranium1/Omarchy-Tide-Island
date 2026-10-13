@@ -52,6 +52,18 @@ echo "$out" | jq -e '.config.coordinateWithBar == true' >/dev/null \
 [[ "$("$ROOT/scripts/tide-sync.sh" probe)" =~ ^bar-(hidden|visible)$ ]] \
   && t "probe answers bar state" && ok || ko
 
+echo "  helper scripts parse arguments without hanging"
+if timeout 5 "$ROOT/scripts/patch-tide-lyrics.sh" --help >/dev/null 2>&1; then
+  t "patch-tide-lyrics.sh --help exits 0" && ok
+else
+  t "patch-tide-lyrics.sh --help did not exit cleanly" && ko
+fi
+# --restore against a missing tree must fail fast (exit 1), never loop forever.
+rc=0
+timeout 5 "$ROOT/scripts/patch-tide-lyrics.sh" --restore --dir "$tmp/absent" >/dev/null 2>&1 || rc=$?
+[[ $rc -eq 1 ]] && t "patch-tide-lyrics.sh --restore fails fast on a missing tree" && ok \
+  || { t "patch-tide-lyrics.sh --restore rc=$rc (expected 1; 124 = hung)" && ko; }
+
 echo "  omarchy validates the plugin folder"
 if (cd "$ROOT" && omarchy plugin validate . >/dev/null 2>&1); then
   t "manifest schema validates" && ok
