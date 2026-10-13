@@ -8,8 +8,9 @@ cleanly when it does.
   (Tide Island runs while the bar is hidden, stops when the bar returns).
 - While the bar is hidden the built-in OSD and notification popups stand down,
   because Tide Island renders its own volume/brightness control center and
-  notification stack. History is unaffected: every notification is still
-  recorded and DND still works.
+  notification stack. History is unaffected: silenced toasts are still archived
+  to history on their normal expiry (the newest 10 are kept), and DND still
+  works.
 - Reconciles itself at shell start, on every flag change and after rapid
   toggles, so a session restart can never strand the bar and the island both
   visible (or both hidden) on top of each other.
@@ -58,8 +59,10 @@ That does all of this, safely:
 2. Seeds `~/.config/omarchy/tide-island.json` (only if absent).
 3. Clones `omarchy.osd` / `omarchy.notifications` into your config (only if
    you don't have clones yet) and patches them to stand down while the flag
-   is present. Never touches the built-ins. Every modified file is backed up
-   to `~/.local/state/omarchy/tide-island/backups/`.
+   is present. Never touches the built-ins. Every file we modify is backed up
+   to `~/.local/state/omarchy/tide-island/backups/`. If you already had a
+   suppressed clone, it is detected and left exactly as-is (and never reverted
+   by `uninstall.sh`).
 4. Wires the keybinding **only when nothing already binds
    `SUPER + SHIFT + SPACE`** — if your `bindings.lua`/`hyprland.lua` already
    handles it, your config is left untouched. On a fresh machine it installs
@@ -69,7 +72,8 @@ That does all of this, safely:
 
 Everything is recorded in `~/.local/state/omarchy/tide-island/installed.json`.
 Repeat `install.sh` to repair; `uninstall.sh` reverses it (nothing user-created
-is ever deleted, just backed up).
+is ever deleted, just backed up, and a stand-down you had before the plugin is
+left in place).
 
 ## Configuration
 
