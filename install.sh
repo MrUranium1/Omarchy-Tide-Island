@@ -191,7 +191,7 @@ log "wrote $INSTALLED_FILE"
 
 # ---------------------------------------------------------------- shell sync
 
-omarchy-shell -q "$PLUGIN_ID" refresh 2>/dev/null || true
+omarchy-shell -q tide-island refresh 2>/dev/null || true
 
 # ------------------------------------------------------------------- summary
 
