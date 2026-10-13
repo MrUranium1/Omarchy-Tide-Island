@@ -205,6 +205,21 @@ grep -rq 'popupsSuppressed' "$PLUGINS" 2>/dev/null \
 [[ -f "$TIDE_USERCONFIG" ]] && grep -q 200 "$TIDE_USERCONFIG" \
   && ok "customized Tide config survives the reap too" || ko "reap deleted a customized Tide config"
 
+echo "  reap still cleans suppression when the recorded state is gone"
+(cd "$ROOT" && bash install.sh) >"$SB/i5.log" 2>&1 && ok "reinstall before state-less reap exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i5.log"; }
+rm -f "$STATE/installed.json"
+rm -rf "$STATE/patch-state"
+mkdir -p "$PLUGINS/mehir.tide-island"
+omarchy plugin remove mehir.tide-island --yes >/dev/null 2>&1
+bash "$HOME/.local/lib/omarchy-tide-island/teardown.sh" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap2.log" 2>&1 \
+  && ok "state-less reap exits 0" || { ko "reap failed"; tail -n20 "$SB/reap2.log"; }
+[[ ! -e "$PLUGINS/mehir.osd" && ! -e "$PLUGINS/mehir.notifications" ]] \
+  && ok "clones removed even without installed.json" || ko "clones survived the state-less reap"
+grep -rq 'The bar-off marker\|popupsSuppressed' "$PLUGINS" 2>/dev/null \
+  && ko "suppression survived the state-less reap" || ok "suppression fully undone without state"
+[[ ! -e "$STATE" && ! -e "$HOME/.local/lib/omarchy-tide-island" ]] \
+  && ok "state + helper reclaimed by state-less reap" || ko "reap leftovers remain"
+
 echo
 echo "cleanroom: $pass passed, $fail failed"
 (( fail == 0 ))

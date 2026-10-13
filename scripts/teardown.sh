@@ -111,57 +111,97 @@ remove_clone() {
 
 # ------------------------------------------------------------- suppression
 
-undo_suppression() {
-  mkdir -p "$BACKUPS"
-  local role id created marker entry file base backup upstream dir
-  for role in osd notifications; do
-    id="$(jq -r --arg r "$role" '.suppression[$r].after // empty' <<<"$state" 2>/dev/null || true)"
-    created="$(jq -r --arg r "$role" '.suppression[$r].createdByUs // false' <<<"$state" 2>/dev/null || true)"
-    [[ -n $id ]] || continue
-    dir="$PLUGINS_DIR/$id"
-    if [[ ! -d $dir ]]; then
-      rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
-      continue
-    fi
+# State-less fallback: sweep every clone of this role for our own marker. Used
+# when installed.json is gone (a previous --final, a manual clear, or a reap
+# that ran after the state was already removed) yet our suppression patch is
+# still live in the clones. Only clones whose entry point actually carries our
+# marker are touched, so an unrelated custom clone is never harmed.
+scan_and_clean() {
+  local role="$1" skip="$2" m id entry file base backup upstream marker
+  for m in "$PLUGINS_DIR"/*/manifest.json; do
+    [[ -f $m ]] || continue
+    id="$(basename "$(dirname "$m")")"
+    [[ $id == "$skip" || $id == "$PLUGIN_ID" ]] && continue
+    [[ "$(jq -r '.omarchy.clonedFrom // .clonedFrom // empty' "$m" 2>/dev/null || true)" == "omarchy.$role" ]] || continue
+    entry="$(jq -r '.entryPoints.panel // .entryPoints.service // .entryPoints.barWidget // empty' "$m" 2>/dev/null || true)"
+    [[ -z $entry ]] && continue
+    file="${m%/manifest.json}/$entry"
+    [[ -f $file ]] || continue
+    marker="The bar-off marker"
+    [[ $role == notifications ]] && marker="popupsSuppressed"
+    grep -q "$marker" "$file" || continue
 
-    if [[ $created == "true" && $opt_remove_clones == 1 ]]; then
+    if (( opt_remove_clones )); then
       remove_clone "$id"
       continue
     fi
-
-    marker="$(cat "$STATE_MARKERS/$id" 2>/dev/null || true)"
-    if [[ $marker == preexisting ]]; then
-      log "clone '$id' was already suppressed before the plugin; leaving it untouched."
-      continue
-    fi
-    if [[ -z $marker && $created != "true" ]]; then
-      log "no record of this plugin patching '$id'; leaving it untouched."
-      continue
-    fi
-
-    entry="$(jq -r '.entryPoints.panel // .entryPoints.service // .entryPoints.barWidget // empty' \
-      "$dir/manifest.json" 2>/dev/null || true)"
-    if [[ -z $entry ]]; then
-      log "cannot determine the entry point of '$id'; leaving it."
-      continue
-    fi
-    file="$dir/$entry"
     base="$(basename "$file")"
     backup="$(ls -1t "$BACKUPS"/*."$id".$base 2>/dev/null | head -1 || true)"
     upstream="$UPSTREAM/$role/$base"
     if [[ -n $backup ]]; then
       cp "$backup" "$file"
-      rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
       log "de-suppressed '$id' (restored $base from backup)."
     elif [[ -f $upstream ]]; then
       cp "$upstream" "$file"
-      rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
       log "de-suppressed '$id' (restored $base from the built-in)."
-    elif (( opt_remove_clones )); then
-      remove_clone "$id"
     else
-      log "could not automatically restore '$id'; re-clone it if popups misbehave." >&2
+      log "cannot restore '$id' automatically; re-clone it if popups misbehave." >&2
+      continue
     fi
+    rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+  done
+}
+
+undo_suppression() {
+  mkdir -p "$BACKUPS"
+  local role id created marker entry file base backup upstream dir handled
+  for role in osd notifications; do
+    handled=""
+    id="$(jq -r --arg r "$role" '.suppression[$r].after // empty' <<<"$state" 2>/dev/null || true)"
+    created="$(jq -r --arg r "$role" '.suppression[$r].createdByUs // false' <<<"$state" 2>/dev/null || true)"
+    if [[ -n $id ]]; then
+      handled="$id"
+      dir="$PLUGINS_DIR/$id"
+      if [[ ! -d $dir ]]; then
+        rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+      else
+        if [[ $created == "true" && $opt_remove_clones == 1 ]]; then
+          remove_clone "$id"
+        else
+          marker="$(cat "$STATE_MARKERS/$id" 2>/dev/null || true)"
+          if [[ $marker == preexisting ]]; then
+            log "clone '$id' was already suppressed before the plugin; leaving it untouched."
+          elif [[ -n $marker || $created == "true" ]]; then
+            entry="$(jq -r '.entryPoints.panel // .entryPoints.service // .entryPoints.barWidget // empty' \
+              "$dir/manifest.json" 2>/dev/null || true)"
+            if [[ -z $entry ]]; then
+              log "cannot determine the entry point of '$id'; leaving it."
+            else
+              file="$dir/$entry"
+              base="$(basename "$file")"
+              backup="$(ls -1t "$BACKUPS"/*."$id".$base 2>/dev/null | head -1 || true)"
+              upstream="$UPSTREAM/$role/$base"
+              if [[ -n $backup ]]; then
+                cp "$backup" "$file"
+                rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+                log "de-suppressed '$id' (restored $base from backup)."
+              elif [[ -f $upstream ]]; then
+                cp "$upstream" "$file"
+                rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+                log "de-suppressed '$id' (restored $base from the built-in)."
+              elif (( opt_remove_clones )); then
+                remove_clone "$id"
+              else
+                log "could not restore '$id'; re-clone it if popups misbehave." >&2
+              fi
+            fi
+          else
+            log "no record of this plugin patching '$id'; leaving it untouched."
+          fi
+        fi
+      fi
+    fi
+    scan_and_clean "$role" "$handled"
   done
 }
 
