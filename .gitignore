@@ -1,0 +1,11 @@
+# Test scratch and local run artifacts
+*.tmp
+*.log
+*.orig
+*.rej
+tests/.sandbox/
+.DS_Store
+
+# Editor/OS cruft
+*~
+*.swp

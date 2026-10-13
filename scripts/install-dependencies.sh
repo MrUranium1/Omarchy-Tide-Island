@@ -36,13 +36,13 @@ parse_args() {
 }
 
 REQUIRED=(
-  "tide-island:runtime:the Pacific Dawn-inspired dynamic island"
-  "quickshell:runtime:the QtQuick shell that renders Tide Island"
-  "jq:tooling:for reading the plugin config file"
-  "patch:tooling:for patching the OSD/notifications clones"
+  "tide-island:tide-island:the Pacific Dawn-inspired dynamic island"
+  "quickshell:quickshell:the QtQuick shell that renders Tide Island"
+  "jq:jq:for reading the plugin config file"
+  "patch:patch:for patching the OSD/notifications clones"
 )
 OPTIONAL=(
-  "python3:tooling:only for the pretty CLI status screen"
+  "python3:python:only for the pretty CLI status screen"
 )
 
 have() { command -v "$1" >/dev/null 2>&1; }

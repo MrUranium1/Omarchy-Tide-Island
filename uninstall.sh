@@ -24,7 +24,7 @@ HYPR="$HOME/.config/hypr"
 TSTAMP="$(date +%Y%m%d-%H%M%S)"
 
 flag_remove_plugin=0
-flag_keep_config=0
+flag_purge_config=0
 
 usage() {
   cat <<USAGE
@@ -41,7 +41,7 @@ USAGE
 while (( $# )); do
   case "$1" in
     --remove-plugin) flag_remove_plugin=1 ;;
-    --purge-config) flag_keep_config=1 ;;
+    --purge-config) flag_purge_config=1 ;;
     -h | --help) usage && exit 0 ;;
     *) usage >&2 && exit 2 ;;
   esac
@@ -122,7 +122,7 @@ fi
 
 # ----------------------------------------------------------------- config
 
-if [[ $flag_keep_config == 1 && -f $CONFIG_TARGET ]]; then
+if [[ $flag_purge_config == 1 && -f $CONFIG_TARGET ]]; then
   cp "$CONFIG_TARGET" "$BACKUPS/$TSTAMP.tide-island.json"
   rm -f "$CONFIG_TARGET"
   log "removed $CONFIG_TARGET (backup kept). Re-running install.sh resurrects it."

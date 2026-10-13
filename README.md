@@ -138,4 +138,5 @@ machine without disturbing the session.
 
 See NOTICE.md and LICENSE. The plugin's own code is MIT. The suppression
 patches are modifications of Omarchy's MIT plugins. The Tide lyrics patch is a
-derivative of Tide Island's GPL-3.0-only code.
+derivative of Tide Island's GPL-3.0-only code (`LICENSES/GPL-3.0-only.txt`).
+Quickshell (LGPL-3.0-only) is a runtime dependency, used as a separate program.

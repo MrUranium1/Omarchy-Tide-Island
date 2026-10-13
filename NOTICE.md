@@ -36,9 +36,25 @@ source code and must be distributed under Tide Island's license.
 
 - Source: https://github.com/enhaoswen/Tide-island (Tide Island)
 - Copyright and license: Tide Island is licensed **GPL-3.0-only**
-  (see the project's LICENSE/COPYING or the installed package).
+  (see the project's LICENSE/COPYING or the installed package). A verbatim copy
+  of that license is included in `LICENSES/GPL-3.0-only.txt`.
 - The patch does not change Tide Island's licensing: applying or redistributing
   it applies only to Tide Island's GPL-3.0-only code as normal.
+
+## Runtime dependency: Quickshell (LGPL-3.0-only)
+
+The plugin is loaded and rendered by **Quickshell** (https://quickshell.org,
+licensed **LGPL-3.0-only**). `Service.qml` uses Quickshell's public QML API and
+is interpreted by it at runtime; it is not linked into Quickshell, so the MIT
+terms of this repository's own code are unaffected. If you modify Quickshell
+itself, your changes to Quickshell remain under the LGPL.
+
+## Scope of licenses
+
+The plugin's own code is one independent work (MIT). The Tide lyrics patch is a
+separate, Tide-derived work (GPL-3.0-only). They are merely distributed
+together in this repository (an aggregate); the GPL obligations apply only to
+the GPL-covered file, not to the MIT-licensed plugin.
 
 ## Shared config format
 
