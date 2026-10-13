@@ -25,8 +25,8 @@ tide_pids() { pgrep -af 'quickshell -p .*tide-island' | wc -l || true; }
 # Count regular files in a directory; returns 0 for a missing/empty directory.
 count_files() { local d="$1"; [[ -d $d ]] || { echo 0; return 0; }; find "$d" -maxdepth 1 -type f 2>/dev/null | wc -l; }
 
-wait_until() { # $1 = single-quoted condition (evaluated each pass), $2 = timeout secs
-  local deadline=$((SECONDS + ${2:-10}))
+wait_until() { # $1 = single-quoted condition (evaluated each pass), $2 = label, $3 = timeout secs
+  local deadline=$((SECONDS + ${3:-10}))
   while (( SECONDS < deadline )); do
     if eval "$1" >/dev/null 2>&1; then return 0; fi
     sleep 0.25
@@ -109,7 +109,7 @@ echo "  E. notifications suppressed (history still recorded)"
 # Use the real toggle so the notification plugin's probe is nudged; a raw
 # touch would leave its suppression state stale.
 [[ -f $FLAG ]] || "$TOGGLE"
-wait_until '[[ "$(omarchy-shell tide-island status 2>/dev/null | jq -r .notificationsSuppression 2>/dev/null || true)" == "true" ]]' 10
+wait_until '[[ "$(omarchy-shell tide-island status 2>/dev/null | jq -r .notificationsSuppression 2>/dev/null || true)" == "true" ]]' "notifications suppression on" 10
 tag="live-suppressed-$$"
 before=$(count_files "$HISTORY")
 notify-send -a tide-plugin-test "$tag" "suppressed popup" >/dev/null 2>&1 || true
@@ -117,7 +117,7 @@ sleep 1.5
 popups_during=$(count_files "$POPUPS")
 # A suppressed toast never shows, but is archived to history when its own
 # expiry timer fires (normal urgency = 8s); allow a margin past that.
-wait_until '[[ $(count_files "$HISTORY") -gt '"$before"' ]]' 16
+wait_until '[[ $(count_files "$HISTORY") -gt '"$before"' ]]' "history grows" 16
 after=$(count_files "$HISTORY")
 [[ $popups_during -eq 0 ]] && ok "no popup while suppressed" || ko "popup(s) shown while suppressed ($popups_during)"
 [[ $after -gt $before ]] && ok "history recorded the suppressed notification (now $after)" || ko "history did not grow ($before -> $after)"
