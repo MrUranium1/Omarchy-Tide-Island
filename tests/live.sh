@@ -22,6 +22,9 @@ runtest() { echo "  - $*"; }
 
 tide_pids() { pgrep -af 'quickshell -p .*tide-island' | wc -l || true; }
 
+# Count regular files in a directory; returns 0 for a missing/empty directory.
+count_files() { local d="$1"; [[ -d $d ]] || { echo 0; return 0; }; find "$d" -maxdepth 1 -type f 2>/dev/null | wc -l; }
+
 wait_until() { # $1 = single-quoted condition (evaluated each pass), $2 = description
   local deadline=$((SECONDS + 10))
   while (( SECONDS < deadline )); do
@@ -102,12 +105,12 @@ restore_state
 sleep 1
 
 echo "  E. notifications suppressed (history still recorded)"
-before=$(ls "$HISTORY" 2>/dev/null | wc -l)
+before=$(count_files "$HISTORY")
 notify-send -a tide-plugin-test live-suppressed "suppressed popup" >/dev/null 2>&1 || true
 sleep 1.2
-popups_during=$(ls "$POPUPS" 2>/dev/null | wc -l)
-wait_until '[[ $(ls "$HISTORY" 2>/dev/null | wc -l) -gt '"$before"' ]]' "history grows"
-after=$(ls "$HISTORY" 2>/dev/null | wc -l)
+popups_during=$(count_files "$POPUPS")
+wait_until '[[ $(count_files "$HISTORY") -gt '"$before"' ]]' "history grows"
+after=$(count_files "$HISTORY")
 [[ $popups_during -eq 0 ]] && ok "no popup while suppressed" || ko "popup(s) shown while suppressed ($popups_during)"
 [[ $after -gt $before ]] && ok "history recorded the suppressed notification (now $after)" || ko "history did not grow ($before -> $after)"
 rg -l '"tide-plugin-test"' "$HISTORY" >/dev/null 2>&1 \
