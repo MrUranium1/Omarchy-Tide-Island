@@ -203,6 +203,22 @@ scripts/patch-tide-lyrics.sh --restore    # undoes it
   only your own clones are patched (creating them if needed).
 - Your Hyprland bindings when a bar/tide binding already exists.
 
+## Compatibility & dependencies
+
+- The stand-down is implemented as patches against Omarchy's first-party
+  `omarchy.osd` / `omarchy.notifications` plugins, so it is **version
+  sensitive**: if Omarchy changes those plugins, `scripts/ensure-suppression.sh`
+  may need updating. Patches are applied only to your own clones (never the
+  built-ins); `tests/unit.sh` checks they apply and reverse cleanly.
+- Making the patched clones serve immediately relies on Omarchy's shell IPC
+  (`omarchy-shell <target> syncSuppression` and `shell rescanPlugins`). If that
+  interface changes, `scripts/ensure-mount.sh` fails safe — it logs the reason,
+  writes no "setup complete" marker, and retries on the next shell start rather
+  than reporting a false success.
+- Verified against the first-party OSD/notifications shipped with the Omarchy
+  version in use at the time of writing. `tests/cleanroom.sh` models the whole
+  lifecycle offline, so regressions are caught without a live session.
+
 ## Tests
 
 ```sh
