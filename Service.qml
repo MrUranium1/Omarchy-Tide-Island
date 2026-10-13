@@ -22,7 +22,9 @@ Item {
     property var shell: null
 
     readonly property string home: Quickshell.env("HOME")
-    readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+    // Injected by omarchy-shell when present (a plain, writable property so the
+    // shell's service loader can assign its own value, as it does for others).
+    property string omarchyPath: Quickshell.env("OMARCHY_PATH")
     readonly property string configPath: home + "/.config/omarchy/tide-island.json"
     readonly property string syncScript:
         Qt.resolvedUrl("scripts/tide-sync.sh").toString().replace("file://", "")
@@ -75,8 +77,13 @@ Item {
         path: plugin.configPath
         watchChanges: true
         printErrors: false
-        onLoaded: plugin.loadConfig(text())
-        onLoadFailed: plugin.loadConfig("")
+        onLoaded: {
+            var raw = text()
+            // Deferred so a synchronous onLoaded during construction cannot
+            // dereference the root id before it is fully bound.
+            Qt.callLater(function() { plugin.loadConfig(raw) })
+        }
+        onLoadFailed: Qt.callLater(function() { plugin.loadConfig("") })
         onFileChanged: reload()
     }
 
