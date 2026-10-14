@@ -203,6 +203,33 @@ t "links tide-island onto PATH"
 t "second run is idempotent"
 run_ir >/dev/null 2>&1 && [[ "$(cat "$ir_prefix/.version")" == "$(cat "$ROOT/vendor/tide-island/VERSION")" ]] && ok || ko
 
+# A vendored edit must redeploy even when upstream VERSION is unchanged.
+fr="$tmp/fakeroot"
+mkdir -p "$fr/vendor/tide-island/bin" "$fr/vendor/tide-island/lib" \
+  "$fr/vendor/tide-island/share/tide-island" "$fr/scripts"
+cp "$ROOT/scripts/install-tide-runtime.sh" "$fr/scripts/"
+printf '1.0.41\n' >"$fr/vendor/tide-island/VERSION"
+printf '#!/bin/true\n' >"$fr/vendor/tide-island/bin/tide-island"
+printf '#!/bin/true\n' >"$fr/vendor/tide-island/bin/tide-island-config-app"
+chmod 0755 "$fr/vendor/tide-island/bin/"*
+: >"$fr/vendor/tide-island/lib/libIslandBackend.so"
+printf '// v1\n' >"$fr/vendor/tide-island/share/tide-island/shell.qml"
+fr_prefix="$fr/home/.local/share/omarchy-tide-island"
+run_fr() {
+  HOME="$fr/home" TIDE_ISLAND_FORCE_BUNDLE=1 TIDE_ISLAND_PREFIX="$fr_prefix" \
+    TIDE_SYNC_SYSTEMCTL=/bin/true bash "$fr/scripts/install-tide-runtime.sh" "$@"
+}
+run_fr >/dev/null 2>&1
+t "content refresh: first install deploys the tree"
+grep -q '// v1' "$fr_prefix/share/tide-island/shell.qml" && ok || ko
+printf '// v2\n' >"$fr/vendor/tide-island/share/tide-island/shell.qml"
+run_fr >/dev/null 2>&1
+t "content refresh: a vendored edit redeploys at the same VERSION"
+grep -q '// v2' "$fr_prefix/share/tide-island/shell.qml" && ok || ko
+run_fr >/dev/null 2>&1
+t "content refresh: unchanged tree stays a no-op"
+grep -q '// v2' "$fr_prefix/share/tide-island/shell.qml" && ok || ko
+
 printf 'FOREIGN UNIT\n' >"$ir/home/.config/systemd/user/tide-island.service"
 run_ir >/dev/null 2>&1
 t "never clobbers a foreign (non-managed) unit"

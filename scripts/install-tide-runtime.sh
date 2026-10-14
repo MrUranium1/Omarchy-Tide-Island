@@ -30,12 +30,26 @@ SERVICE="tide-island.service"
 UNIT="$UNIT_DIR/$SERVICE"
 UNIT_MARKER="# managed by mehir.tide-island"
 VERSION_FILE="$PREFIX/.version"
+CONTENT_FILE="$PREFIX/.content-sha256"
 
 [[ -x "$VENDOR/bin/tide-island" ]] || {
   log "bundled runtime missing at $VENDOR (corrupt checkout?)"
   exit 1
 }
 VERSION="$(cat "$VENDOR/VERSION" 2>/dev/null || echo unknown)"
+
+# A stable fingerprint of the actual files we ship (not just the version
+# string), so local changes to the vendored tree are redeployed even when
+# upstream's VERSION is unchanged.
+vendor_content_hash() {
+  local h=""
+  h="$( cd "$VENDOR" 2>/dev/null \
+    && { find bin lib share -type f -print0 2>/dev/null \
+      | sort -z | xargs -0 -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1; } )" \
+    || true
+  printf '%s' "$h"
+}
+CONTENT_HASH="$(vendor_content_hash)"
 
 already_on_path=0
 if [[ ${TIDE_ISLAND_FORCE_BUNDLE:-0} == 1 ]]; then
@@ -55,11 +69,17 @@ if (( already_on_path )); then
   log "a tide-island is already on PATH ('$(command -v tide-island)'); leaving it alone."
 else
   if [[ "$(cat "$VERSION_FILE" 2>/dev/null || true)" == "$VERSION" ]] \
+    && [[ "$(cat "$CONTENT_FILE" 2>/dev/null || true)" == "$CONTENT_HASH" ]] \
     && [[ -x "$PREFIX/bin/tide-island" ]] \
     && [[ -x "$PREFIX/bin/tide-island-config-app" ]]; then
     log "bundled Tide Island $VERSION already installed at $PREFIX."
   else
-    log "installing bundled Tide Island $VERSION -> $PREFIX"
+    if [[ "$(cat "$VERSION_FILE" 2>/dev/null || true)" == "$VERSION" ]] \
+      && [[ -x "$PREFIX/bin/tide-island" ]]; then
+      log "refreshing bundled Tide Island $VERSION at $PREFIX (content changed)."
+    else
+      log "installing bundled Tide Island $VERSION -> $PREFIX"
+    fi
     rm -rf "${PREFIX:?}/bin" "${PREFIX:?}/lib" "${PREFIX:?}/share"
     mkdir -p "$PREFIX"
     cp -a "$VENDOR/bin" "$VENDOR/lib" "$VENDOR/share" "$PREFIX/"
@@ -67,6 +87,7 @@ else
     [[ -d "$PREFIX/share/tide-island/bin" ]] \
       && chmod 0755 "$PREFIX/share/tide-island/bin/"* 2>/dev/null || true
     printf '%s\n' "$VERSION" >"$VERSION_FILE"
+    printf '%s\n' "$CONTENT_HASH" >"$CONTENT_FILE"
   fi
 fi
 
