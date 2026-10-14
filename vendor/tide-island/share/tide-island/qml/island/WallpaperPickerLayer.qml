@@ -14,6 +14,7 @@ FocusScope {
     property bool showCondition: false
     property string iconFontFamily: ""
     property string textFontFamily: ""
+    property string startMode: "wallpapers"
     readonly property var userConfig: UserConfig
 
     property bool pywalEnabled: userConfig.wallpaperPywalEnabled
@@ -293,6 +294,7 @@ FocusScope {
 
     onShowConditionChanged: {
         if (showCondition) {
+            root.mode = root.startMode;
             root.probeOmarchy();
             root.grabKeyboardFocus();
         } else {
@@ -880,7 +882,7 @@ FocusScope {
 
             Rectangle {
                 id: searchBg
-                width: searchBar.expanded ? (searchBar.width - (root.omarchyMode ? tabsRow.width : 0)) : 34
+                width: searchBar.expanded ? searchBar.width : 34
                 height: 34
                 anchors.right: parent.right
                 radius: 10
@@ -986,54 +988,7 @@ FocusScope {
                     onClicked: searchInput.text = ""
                 }
             }
-
-            // ── Wallpapers / Themes switch (plugin addition) ──────────────
-            Row {
-                id: tabsRow
-                visible: root.omarchyMode
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                height: 26
-                spacing: 4
-
-                Repeater {
-                    model: [
-                        { label: "Wallpapers", value: "wallpapers" },
-                        { label: "Themes", value: "themes" }
-                    ]
-
-                    Rectangle {
-                        width: tabLabel.implicitWidth + 20
-                        height: 26
-                        radius: 8
-                        color: root.mode === modelData.value
-                            ? Qt.rgba(1, 1, 1, 0.14)
-                            : (tabMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent")
-                        border.width: root.mode === modelData.value ? 1 : 0
-                        border.color: "#60a5fa"
-
-                        Text {
-                            id: tabLabel
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            color: root.mode === modelData.value ? "white" : Qt.rgba(1, 1, 1, 0.5)
-                            font.pixelSize: 11
-                            font.family: root.textFontFamily
-                            font.weight: root.mode === modelData.value ? Font.Medium : Font.Normal
-                        }
-
-                        MouseArea {
-                            id: tabMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.switchMode(modelData.value)
-                        }
-                    }
-                }
-            }
         }
-
         // ── Carousel ───────────────────────────────────────────────────────
         Item {
             width: parent.width

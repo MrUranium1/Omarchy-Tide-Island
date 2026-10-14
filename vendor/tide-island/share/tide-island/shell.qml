@@ -286,6 +286,18 @@ Scope {
             shellRoot.forFocusedWindow((window) => window.toggleWallpaperPickerWindow());
         }
 
+        function toggleThemePicker() {
+            shellRoot.forFocusedWindow((window) => window.toggleThemePickerWindow());
+        }
+
+        function showThemePicker() {
+            shellRoot.forFocusedWindow((window) => window.showThemePickerWindow ? window.showThemePickerWindow() : window.toggleThemePickerWindow());
+        }
+
+        function showWallpaperPicker() {
+            shellRoot.forFocusedWindow((window) => window.showWallpaperPickerWindow ? window.showWallpaperPickerWindow() : window.toggleWallpaperPickerWindow());
+        }
+
         function toggleApplicationLauncher() {
             shellRoot.forFocusedWindow((window) => window.toggleApplicationLauncherWindow());
         }

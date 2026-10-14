@@ -61,7 +61,7 @@ the island keybindings to `hyprland.lua`. The
 Tide Island **Settings** app is bundled too — open it from the app menu
 ("Tide Island Settings") or run `tide-island-config-app`. The bundled island
 includes an **Omarchy-aware wallpaper/theme picker** (activated by
-`SUPER + ALT + W` when the managed shortcuts are wired) that lists the
+`SUPER + ALT + Q`, `SUPER + ALT + W` when the managed shortcuts are wired) that lists the
 backgrounds and themes of the current Omarchy theme, switching them via
 Omarchy's own commands so both interfaces stay in sync. Then the island
 appears whenever the bar is hidden. On a machine with no Tide config yet, it
@@ -217,6 +217,7 @@ defaults:
 | `SUPER + ALT + V` | Clipboard manager |
 | `SUPER + ALT + D` | Calendar |
 | `SUPER + ALT + W` | Wallpaper library |
+| `SUPER + ALT + Q` | Theme selection |
 
 Left unassigned by default: workspace overview (`overview:toggle`), the "next
 island view" swipe (`tide:swipeRight`) and weather (`tide:toggleWeather`) —

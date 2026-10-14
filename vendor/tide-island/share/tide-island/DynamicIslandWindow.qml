@@ -306,6 +306,7 @@ PanelWindow {
     readonly property real connectivityDetailGap: 16
     readonly property int connectivityDetailAnimationDuration: 360
     readonly property string overviewWallpaperSource: overviewWallpaperCache.effectiveSource
+    property string wallpaperPickerStartMode: "wallpapers"
     property string wallpaperPickerActiveWallpaper: userConfig.wallpaperPath
 
     Behavior on autoHideProgress {
@@ -670,10 +671,25 @@ PanelWindow {
     }
 
     function toggleWallpaperPickerWindow() {
-        if (islandContainer.islandState === "wallpaper_picker")
+        if (islandContainer.islandState === "wallpaper_picker" && root.wallpaperPickerStartMode === "wallpapers")
             islandContainer.smartRestoreState();
         else
             islandContainer.showWallpaperPicker();
+    }
+
+    function toggleThemePickerWindow() {
+        if (islandContainer.islandState === "wallpaper_picker" && root.wallpaperPickerStartMode === "themes")
+            islandContainer.smartRestoreState();
+        else
+            islandContainer.showThemePicker();
+    }
+
+    function showThemePickerWindow() {
+        islandContainer.showThemePicker();
+    }
+
+    function showWallpaperPickerWindow() {
+        islandContainer.showWallpaperPicker();
     }
 
     function toggleApplicationLauncherWindow() {
@@ -1868,6 +1884,17 @@ PanelWindow {
 
 
         function showWallpaperPicker() {
+            root.wallpaperPickerStartMode = "wallpapers";
+            cancelSideSwipeSettle();
+            abortSideTransientMode();
+            clearTransientCapsule();
+            islandState = "wallpaper_picker";
+            mainCapsule.displayedWidth = mainCapsule.baseTargetWidth;
+            stopAutoHideTimer();
+        }
+
+        function showThemePicker() {
+            root.wallpaperPickerStartMode = "themes";
             cancelSideSwipeSettle();
             abortSideTransientMode();
             clearTransientCapsule();
@@ -2822,6 +2849,7 @@ PanelWindow {
                         iconFontFamily: root.iconFontFamily
                         textFontFamily: root.textFontFamily
                         activeWallpaper: root.wallpaperPickerActiveWallpaper
+                        startMode: root.wallpaperPickerStartMode
                         showCondition: islandContainer.wallpaperPickerLayerVisible
                         onWallpaperApplied: filePath => root.wallpaperPickerActiveWallpaper = filePath
                         onWallpaperApplySucceeded: filePath => root.handleWallpaperApplySucceeded(filePath)

@@ -253,8 +253,8 @@ while IFS= read -r c; do
   [[ -z $c ]] && continue
   [[ $c =~ ^SUPER\ \+\ ALT\ \+\ [A-Z]$ ]] || bad_chord="$bad_chord $c"
 done <<<"$chords"
-[[ -z ${bad_chord// /} && $(grep -c . <<<"$chords") -eq 13 ]] \
-  && t "the wired block is 13 SUPER + ALT + <letter> chords" && ok \
+[[ -z ${bad_chord// /} && $(grep -c . <<<"$chords") -eq 14 ]] \
+  && t "the wired block is 14 SUPER + ALT + <letter> chords" && ok \
   || { t "wired block has an unexpected chord (count $(grep -c . <<<"$chords")):$bad_chord" && ko; }
 [[ "$(sort <<<"$chords" | uniq -d | wc -l)" -eq 0 ]] \
   && t "no shortcut chord is wired twice" && ok \

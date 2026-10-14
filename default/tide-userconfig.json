@@ -5,21 +5,107 @@
     "islandHeight": 36,
     "islandWidth": 140,
     "shortcutBindings": [
-        { "mods": "SUPER ALT", "key": "H", "target": "tide", "method": "swipeLeft" },
-        { "mods": "SUPER ALT", "key": "J", "target": "tide", "method": "showClock" },
-        { "mods": "SUPER ALT", "key": "T", "target": "tide", "method": "showTimer" },
-        { "mods": "SUPER ALT", "key": "M", "target": "tide", "method": "togglePlayer" },
-        { "mods": "SUPER ALT", "key": "C", "target": "tide", "method": "toggleControlCenter" },
-        { "mods": "SUPER ALT", "key": "P", "target": "tide", "method": "togglePowerMenu" },
-        { "mods": "SUPER ALT", "key": "N", "target": "tide", "method": "toggleNotificationCenter" },
-        { "mods": "SUPER ALT", "key": "A", "target": "tide", "method": "toggleApplicationLauncher" },
-        { "mods": "SUPER ALT", "key": "O", "target": "tide", "method": "toggleFileShelf" },
-        { "mods": "SUPER ALT", "key": "V", "target": "tide", "method": "toggleClipboard" },
-        { "mods": "SUPER ALT", "key": "D", "target": "tide", "method": "toggleCalendar" },
-        { "mods": "SUPER ALT", "key": "I", "target": "island", "method": "toggle" },
-        { "mods": "", "key": "", "target": "overview", "method": "toggle" },
-        { "mods": "", "key": "", "target": "tide", "method": "swipeRight" },
-        { "mods": "SUPER ALT", "key": "W", "target": "tide", "method": "toggleWallpaperPicker" },
-        { "mods": "", "key": "", "target": "tide", "method": "toggleWeather" }
+        {
+            "mods": "SUPER ALT",
+            "key": "H",
+            "target": "tide",
+            "method": "swipeLeft"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "J",
+            "target": "tide",
+            "method": "showClock"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "T",
+            "target": "tide",
+            "method": "showTimer"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "M",
+            "target": "tide",
+            "method": "togglePlayer"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "C",
+            "target": "tide",
+            "method": "toggleControlCenter"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "P",
+            "target": "tide",
+            "method": "togglePowerMenu"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "N",
+            "target": "tide",
+            "method": "toggleNotificationCenter"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "A",
+            "target": "tide",
+            "method": "toggleApplicationLauncher"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "O",
+            "target": "tide",
+            "method": "toggleFileShelf"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "V",
+            "target": "tide",
+            "method": "toggleClipboard"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "D",
+            "target": "tide",
+            "method": "toggleCalendar"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "I",
+            "target": "island",
+            "method": "toggle"
+        },
+        {
+            "mods": "",
+            "key": "",
+            "target": "overview",
+            "method": "toggle"
+        },
+        {
+            "mods": "",
+            "key": "",
+            "target": "tide",
+            "method": "swipeRight"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "W",
+            "target": "tide",
+            "method": "toggleWallpaperPicker"
+        },
+        {
+            "mods": "SUPER ALT",
+            "key": "Q",
+            "target": "tide",
+            "method": "toggleThemePicker"
+        },
+        {
+            "mods": "",
+            "key": "",
+            "target": "tide",
+            "method": "toggleWeather"
+        }
     ]
 }

@@ -340,7 +340,7 @@ PREFIX="$HOME/.local/share/omarchy-tide-island"
 grep -q -- '-- Tide Island shortcuts: begin (managed by Tide Island Config App).' "$HYPRLUA" \
   && ok "install writes the managed shortcut block" || ko "no shortcut block written"
 [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "block written exactly once" || ko "block duplicated"
-[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]] && ok "all 13 island bindings present" || ko "expected 13 bindings, found $(grep -c 'hl\.bind(' "$HYPRLUA")"
+[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 14 ]] && ok "all 14 island bindings present" || ko "expected 14 bindings, found $(grep -c 'hl\.bind(' "$HYPRLUA")"
 grep -q 'call island toggle' "$HYPRLUA" && ok "island toggle binding present" || ko "island toggle binding missing"
 grep -q -- "$PREFIX/share/tide-island call tide swipeLeft" "$HYPRLUA" \
   && ok "bindings point at the installed QML runtime" || ko "bindings use the wrong QML path"
@@ -350,7 +350,7 @@ jq -e '.shortcutBinding.createdByUs == true and .shortcutBinding.wired == true' 
 
 echo "  repeated install keeps a single block"
 (cd "$ROOT" && bash install.sh) >"$SB/k2.log" 2>&1 && ok "repeat install exits 0" || ko "repeat install failed"
-if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]]; then
+if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 14 ]]; then
   ok "repeat install leaves exactly one block"
 else
   ko "repeat install changed the block"
@@ -407,7 +407,7 @@ LUA
 grep -q -- "$PREFIX/share/tide-island call tide" "$HYPRLUA" && ok "dead block repaired to the bundled runtime" || ko "block not repaired to the bundled runtime"
 grep -q '/usr/share/tide-island call' "$HYPRLUA" && ko "stale runtime path survived the repair" || ok "stale runtime path removed"
 [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "repair leaves a single block" || ko "repair duplicated the block"
-[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]] && ok "repaired block carries all 13 bindings" || ko "repaired block has $(grep -c 'hl\.bind(' "$HYPRLUA") bindings"
+[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 14 ]] && ok "repaired block carries all 14 bindings" || ko "repaired block has $(grep -c 'hl\.bind(' "$HYPRLUA") bindings"
 jq -e '.shortcutBinding.createdByUs == true' "$STATE/installed.json" >/dev/null 2>&1 && ok "repaired block is now claimed by the plugin" || ko "repair did not claim the block"
 grep -q 'hl.workspace\|hl.config' "$HYPRLUA" && ok "repair preserved unrelated hyprland.lua content" || ko "repair damaged hyprland.lua"
 
