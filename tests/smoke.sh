@@ -51,6 +51,111 @@ jq -e '
 ' "$ROOT/default/tide-userconfig.json" >/dev/null \
   && t "default Tide shortcuts are the 13 island bindings" && ok || ko
 
+echo "  default shortcuts do not collide with Omarchy's own bindings"
+SEED="$ROOT/default/tide-userconfig.json"
+OMARCHY_HYPR="${OMARCHY_PATH:-/usr/share/omarchy}/default/hypr"
+# Every shipped binding must be a single SUPER + ALT + <letter> chord; this is
+# the namespace the island claims so it can never shadow Omarchy's SUPER binds.
+nonalt="$(jq -r '.shortcutBindings[]? | select((.key // "") != "")
+  | select((.mods // "") != "SUPER ALT") | "\(.mods) + \(.key)"' "$SEED")"
+[[ -z $nonalt ]] \
+  && t "every island shortcut uses the SUPER + ALT + <letter> chord" && ok \
+  || { t "island shortcut leaves the SUPER + ALT + <letter> convention:$nonalt" && ko; }
+
+if [[ -d $OMARCHY_HYPR/bindings ]] && command -v lua >/dev/null 2>&1; then
+  cat >"$tmp/omarchy-bindings.lua" <<'LUA'
+-- Read Omarchy's own keybindings straight from its Lua sources so the audit can
+-- never drift from a hand-copied list. Stub the API its modules use and record
+-- every bound chord; then emit the keys bound to a pure SUPER + ALT chord
+-- (modmask 64 + 8), sorted.
+local chords = {}
+local function proxy()
+  return setmetatable({}, { __index = function() return proxy() end,
+                            __call = function() return proxy() end })
+end
+hl = proxy()
+o = {}
+function o.bind(k) chords[#chords + 1] = k end
+function o.bind_toggle(k) chords[#chords + 1] = k end
+function o.window() end
+function o.preinstalled_bindings_enabled() return true end
+function o.cmd_present() return true end
+function o.cmd_missing() return false end
+function o.launch(c) return c end
+function o.launch_sole(a) return a end
+function o.shell_quote(v) return v end
+
+for _, sub in ipairs({ "/bindings", "/apps" }) do
+  local p = io.popen("ls '" .. arg[1] .. sub .. "'/*.lua 2>/dev/null")
+  if p then
+    for f in p:lines() do pcall(assert(loadfile(f))) end
+    p:close()
+  end
+end
+
+local reserved = {}
+for _, c in ipairs(chords) do
+  local mods, key = 0, nil
+  for raw in c:gmatch("[^+]+") do
+    local tok = raw:match("^%s*(.-)%s*$")
+    if tok == "SUPER" then mods = mods + 64
+    elseif tok == "ALT" then mods = mods + 8
+    elseif tok == "SHIFT" then mods = mods + 1
+    elseif tok == "CTRL" then mods = mods + 4
+    else key = tok end
+  end
+  if mods == 72 and key then reserved[key] = true end
+end
+
+local list = {}
+for k in pairs(reserved) do list[#list + 1] = k end
+table.sort(list)
+io.write(table.concat(list, " "))
+LUA
+  reserved="$(lua "$tmp/omarchy-bindings.lua" "$OMARCHY_HYPR" 2>/dev/null || true)"
+  clashes=""
+  while IFS= read -r key; do
+    [[ -z $key ]] && continue
+    for r in $reserved; do [[ $key == "$r" ]] && clashes="$clashes $key"; done
+  done < <(jq -r '.shortcutBindings[]? | select((.key // "") != "") | .key' "$SEED")
+  if [[ -n ${clashes// /} ]]; then
+    t "island shortcut(s)${clashes} already bound by Omarchy (SUPER+ALT reserved: ${reserved:-none})" && ko
+  else
+    t "island shortcuts are free of Omarchy's SUPER+ALT bindings (reserved: ${reserved:-none})" && ok
+  fi
+  # The one conflict this work set out to remove must never reappear.
+  grep -qw W <<<"$reserved" \
+    && { t "SUPER + ALT + W is claimed by Omarchy" && ko; } \
+    || { t "SUPER + ALT + W stays free" && ok; }
+else
+  t "Omarchy hypr bindings or lua unavailable; skipped conflict audit" && ok
+fi
+
+echo "  settings app shows the seeded defaults (seed overrides its built-ins)"
+APP_QML="$ROOT/vendor/tide-island/lib/qt6/qml/TideIsland/Shortcut.qml"
+SHELL_QML="$ROOT/vendor/tide-island/share/tide-island/shell.qml"
+# The Settings app's actions, in declaration order, as target:method pairs.
+app_ids="$(grep -oE '"(target|method)": "[^"]+"' "$APP_QML" \
+             | sed -E 's/.*: "([^"]+)"/\1/' | paste - - | sed 's/\t/:/')"
+seed_ids="$(jq -r '.shortcutBindings[]? | "\(.target):\(.method)"' "$SEED")"
+uncovered=""
+while IFS= read -r id; do
+  [[ -z $id ]] && continue
+  grep -qxF "$id" <<<"$seed_ids" || uncovered="$uncovered $id"
+done <<<"$app_ids"
+[[ -n $app_ids && -z ${uncovered// /} ]] \
+  && t "the seed covers all $(grep -c . <<<"$app_ids") Settings-app actions" && ok \
+  || { t "seed misses Settings-app action(s):$uncovered" && ko; }
+# Each enabled default must drive a function the island actually exposes.
+missing_action=""
+while IFS= read -r m; do
+  [[ -z $m ]] && continue
+  grep -qE "function $m\(\)" "$SHELL_QML" || missing_action="$missing_action $m"
+done < <(jq -r '.shortcutBindings[]? | select((.key // "") != "") | .method' "$SEED")
+[[ -z ${missing_action// /} ]] \
+  && t "every enabled default maps to a real island IPC action" && ok \
+  || { t "no IPC action for:$missing_action" && ko; }
+
 echo "  entry points exist"
 for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json" \
          "packaging/hyprland-tide-island.lua" \
@@ -140,6 +245,74 @@ fi
 jq -e '.shortcutBindings[] | select(.target == "island" and .method == "toggle" and .key == "I")' \
   "$ROOT/default/tide-userconfig.json" >/dev/null \
   && t "default userconfig carries the island binding that gets wired" && ok || ko
+# The wired block must be all SUPER + ALT + <letter>, one chord per action, so a
+# fresh install can never introduce a duplicate or leave the claimed namespace.
+chords="$(sed -nE 's/.*hl\.bind\("([^"]+)".*/\1/p' <<<"$block")"
+bad_chord=""
+while IFS= read -r c; do
+  [[ -z $c ]] && continue
+  [[ $c =~ ^SUPER\ \+\ ALT\ \+\ [A-Z]$ ]] || bad_chord="$bad_chord $c"
+done <<<"$chords"
+[[ -z ${bad_chord// /} && $(grep -c . <<<"$chords") -eq 13 ]] \
+  && t "the wired block is 13 SUPER + ALT + <letter> chords" && ok \
+  || { t "wired block has an unexpected chord (count $(grep -c . <<<"$chords")):$bad_chord" && ko; }
+[[ "$(sort <<<"$chords" | uniq -d | wc -l)" -eq 0 ]] \
+  && t "no shortcut chord is wired twice" && ok \
+  || { t "duplicate wired chord(s): $(sort <<<"$chords" | uniq -d | tr '\n' ' ')" && ko; }
+
+echo "  hyprland packaging module (Lua API)"
+PACK="$ROOT/packaging/hyprland-tide-island.lua"
+cat >"$tmp/window-rule-harness.lua" <<'LUA'
+-- Minimal stand-in for Hyprland's `hl` table and Omarchy's `o` helpers,
+-- mirroring the documented API (hl.window_rule, o.window). Loading the
+-- packaging module against it fails loudly if the module calls an API that
+-- does not exist (e.g. the old hyprlang-style hl.windowrulev2).
+local recorded = {}
+hl = {}
+o = {}
+
+hl.bind = function() end
+hl.unbind = function() end
+hl.dsp = { exec_cmd = function(cmd) return { cmd = cmd } end }
+hl.window_rule = function(spec)
+  recorded[#recorded + 1] = spec
+  return { set_enabled = function() end, is_enabled = function() return true end }
+end
+
+function o.bind() end
+function o.window(match, rules)
+  rules.match = rules.match or {}
+  if type(match) == "string" then
+    rules.match.class = match
+  else
+    for k, v in pairs(match) do rules.match[k] = v end
+  end
+  hl.window_rule(rules)
+end
+
+assert(loadfile(arg[1]))()
+
+local class_rule, title_rule
+for _, r in ipairs(recorded) do
+  if r.match.class == "^tide-island-config-app$" then class_rule = r end
+  if r.match.title == "^Tide Island Config Application$" then title_rule = r end
+end
+
+local function complete(rule)
+  return rule ~= nil and rule.float == true and rule.center == true and rule.no_anim == true
+end
+
+os.exit(complete(class_rule) and complete(title_rule) and 0 or 1)
+LUA
+if command -v lua >/dev/null 2>&1; then
+  if lua "$tmp/window-rule-harness.lua" "$PACK" >/dev/null 2>&1; then
+    t "settings app window rule floats/centers with no animation (valid hl API)" && ok
+  else
+    t "settings app window rule missing or uses an invalid Hyprland Lua API" && ko
+  fi
+else
+  t "lua unavailable; skipped window-rule API check" && ok
+fi
 
 echo "  omarchy-bridge.sh contract"
 BRIDGE="$ROOT/vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh"

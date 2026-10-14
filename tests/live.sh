@@ -140,6 +140,37 @@ echo "$status" | grep -Eq 'bar hidden[[:space:]]+yes' && ok "CLI status: bar hid
 echo "$status" | grep -Eq 'OSD stands down[[:space:]]+yes' && ok "CLI status: OSD stands down" || ko "CLI status missing OSD suppression"
 echo "$status" | grep -Eq 'notifications stand down[[:space:]]+yes' && ok "CLI status: notifications stand down" || ko "CLI status missing notification suppression"
 
+echo "  H. shipped island shortcuts are free against the live compositor"
+if command -v hyprctl >/dev/null 2>&1 && hyprctl version >/dev/null 2>&1; then
+  seed="$ROOT/default/tide-userconfig.json"
+  # Live pure SUPER+ALT letter bindings that belong to something other than the
+  # island. Omarchy's own binds carry a description; the island's managed block
+  # is written by its settings app as lua binds with none, so it never counts.
+  live_reserved="$(hyprctl binds -j 2>/dev/null \
+    | jq -r '.[] | select(.modmask == 72) | .key
+             | select(test("^[A-Z]$"))' 2>/dev/null || true)"
+  live_owned="$(hyprctl binds -j 2>/dev/null \
+    | jq -r '.[] | select(.modmask == 72)
+             | select(((.description // "") | test("island|tide"; "i")))
+             | .key' 2>/dev/null || true)"
+  reserved_letters=""
+  while IFS= read -r k; do
+    [[ -z $k ]] && continue
+    grep -qxF "$k" <<<"$live_owned" && continue
+    reserved_letters="$reserved_letters $k"
+  done <<<"$live_reserved"
+  clash=""
+  while IFS= read -r key; do
+    [[ -z $key ]] && continue
+    for r in $reserved_letters; do [[ $key == "$r" ]] && clash="$clash $key"; done
+  done < <(jq -r '.shortcutBindings[]? | select((.key // "") != "") | .key' "$seed")
+  [[ -z ${clash// /} ]] \
+    && ok "no shipped island shortcut collides with a live SUPER+ALT binding (live reserved:${reserved_letters:-none})" \
+    || ko "island shortcut(s)${clash} collide with a live SUPER+ALT binding"
+else
+  ok "hyprctl unavailable in this session; skipped live keybinding collision check"
+fi
+
 echo
 echo "live: $pass passed, $fail failed"
 (( fail == 0 ))

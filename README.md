@@ -195,6 +195,39 @@ i.e. Reserved Top Space 9, Top Margin 1, Background Transparency 100 (opaque),
 island 36 px tall and 140 px wide. This is a one-time seed — changing or
 removing it later is entirely yours; the settings app reflects it normally.
 
+## Default island shortcuts
+
+On a fresh install the island's shortcuts live in the `SUPER + ALT +` namespace
+so they never shadow Omarchy's own `SUPER` or `SUPER + ALT` bindings (Omarchy
+reserves `SUPER + ALT +` F, G, K and S). The seed gives the settings app these
+defaults:
+
+| Shortcut | Action |
+| --- | --- |
+| `SUPER + ALT + I` | Toggle island |
+| `SUPER + ALT + H` | Previous island view |
+| `SUPER + ALT + J` | Clock view |
+| `SUPER + ALT + T` | Timer |
+| `SUPER + ALT + M` | Music player |
+| `SUPER + ALT + C` | Control center |
+| `SUPER + ALT + P` | Power menu |
+| `SUPER + ALT + N` | Notification history |
+| `SUPER + ALT + A` | Application launcher |
+| `SUPER + ALT + O` | File shelf |
+| `SUPER + ALT + V` | Clipboard manager |
+| `SUPER + ALT + D` | Calendar |
+| `SUPER + ALT + W` | Wallpaper library |
+
+Left unassigned by default: workspace overview (`overview:toggle`), the "next
+island view" swipe (`tide:swipeRight`) and weather (`tide:toggleWeather`) —
+assign them in the settings app if you want them.
+
+The seed is written once (only when you have no Tide config) and the same
+chords are wired into the settings app's managed block in `hyprland.lua`, so
+they are live on a fresh install without opening the app. `tests/smoke.sh`
+re-reads Omarchy's own binding sources on every run and fails if a shipped chord
+would ever collide with one of Omarchy's.
+
 ## Optional: swipe-lyrics without album art
 
 A purely personal change to Tide Island itself (remove the cover thumbnail in

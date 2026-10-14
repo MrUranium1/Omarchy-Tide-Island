@@ -393,6 +393,39 @@ LUA
 (cd "$ROOT" && bash install.sh --no-shortcuts) >"$SB/k9.log" 2>&1 && ok "install --no-shortcuts exits 0" || ko "install --no-shortcuts failed"
 grep -q -- '-- Tide Island shortcuts: begin' "$HYPRLUA" && ko "--no-shortcuts still wrote a block" || ok "--no-shortcuts wrote no block"
 
+echo "  unrelated user keybindings survive install, repeat install and uninstall"
+mkdir -p "$HOME/.config/hypr"
+cat >"$HOME/.config/hypr/bindings.lua" <<'LUA'
+-- my own binding, must never be touched by the plugin
+o.bind("SUPER + SHIFT + Q", "my thing", "my-command")
+LUA
+cp "$HOME/.config/hypr/bindings.lua" "$SB/bindings.before"
+cat >"$HYPRLUA" <<'LUA'
+hl.config({})
+LUA
+(cd "$ROOT" && bash install.sh) >"$SB/k10.log" 2>&1 && ok "install with a user bindings.lua exits 0" || { ko "install failed"; tail -n20 "$SB/k10.log"; }
+cmp -s "$HOME/.config/hypr/bindings.lua" "$SB/bindings.before" \
+  && ok "install leaves an unrelated user bindings.lua byte-for-byte" || ko "install modified the user's bindings.lua"
+(cd "$ROOT" && bash install.sh) >"$SB/k11.log" 2>&1 && ok "repeat install exits 0" || ko "repeat install failed"
+cmp -s "$HOME/.config/hypr/bindings.lua" "$SB/bindings.before" \
+  && ok "repeat install still leaves the user bindings.lua untouched" || ko "repeat install modified bindings.lua"
+(cd "$ROOT" && bash uninstall.sh) >"$SB/k12.log" 2>&1 && ok "uninstall exits 0" || ko "uninstall failed"
+cmp -s "$HOME/.config/hypr/bindings.lua" "$SB/bindings.before" \
+  && ok "uninstall leaves the user bindings.lua untouched" || ko "uninstall modified bindings.lua"
+grep -q 'SUPER + SHIFT + Q' "$HOME/.config/hypr/bindings.lua" && ok "the user binding is still present" || ko "the user binding disappeared"
+
+echo "  an existing customized Tide config is never overwritten by install"
+mkdir -p "$(dirname "$TIDE_USERCONFIG")"
+cat >"$TIDE_USERCONFIG" <<'JSON'
+{ "islandWidth": 321, "shortcutBindings": [ { "mods": "SUPER ALT", "key": "Z", "target": "tide", "method": "showClock" } ] }
+JSON
+cp "$TIDE_USERCONFIG" "$SB/userconfig.before"
+(cd "$ROOT" && bash install.sh) >"$SB/k13.log" 2>&1 && ok "install over a customized Tide config exits 0" || { ko "install failed"; tail -n20 "$SB/k13.log"; }
+cmp -s "$TIDE_USERCONFIG" "$SB/userconfig.before" \
+  && ok "install leaves the customized Tide config byte-for-byte" || ko "install overwrote the user's Tide config"
+jq -e '.tideUserConfig.seeded == false' "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "installed.json records that no seed was forced over the user's config" || ko "install wrongly recorded a Tide config seed"
+
 echo
 echo "cleanroom: $pass passed, $fail failed"
 (( fail == 0 ))
