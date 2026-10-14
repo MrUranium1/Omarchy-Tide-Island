@@ -1,0 +1,14 @@
+diff --git a/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml b/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml
+--- a/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml
++++ b/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml
+@@
+     function finishThemes() {
+         themesLoading = false;
+         themesLoaded = true;
++        // The bridge fills `allThemes`, but the UI is bound to `filteredThemes`.
++        // Rebuild that filtered view once the load completes or the Themes tab
++        // remains empty even though the bridge reported installed themes.
++        rebuildFilteredThemes();
+         syncCurrentThemeIndex();
+     }
+*** End Patch
