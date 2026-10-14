@@ -393,6 +393,24 @@ LUA
 (cd "$ROOT" && bash install.sh --no-shortcuts) >"$SB/k9.log" 2>&1 && ok "install --no-shortcuts exits 0" || ko "install --no-shortcuts failed"
 grep -q -- '-- Tide Island shortcuts: begin' "$HYPRLUA" && ko "--no-shortcuts still wrote a block" || ok "--no-shortcuts wrote no block"
 
+echo "  a managed block pointing at a missing runtime is repaired, not preserved"
+rm -f "$STATE/installed.json"
+cat >"$HYPRLUA" <<'LUA'
+hl.config({})
+LUA
+{
+  printf '%s\n' '-- Tide Island shortcuts: begin (managed by Tide Island Config App).'
+  printf '%s\n' 'hl.bind("SUPER + T", hl.dsp.exec_cmd("/usr/bin/quickshell ipc --any-display -p /usr/share/tide-island call tide showTimer"))'
+  printf '%s\n' '-- Tide Island shortcuts: end.'
+} >>"$HYPRLUA"
+(cd "$ROOT" && bash install.sh) >"$SB/k10.log" 2>&1 && ok "install over a dead-runtime block exits 0" || { ko "install failed"; tail -n20 "$SB/k10.log"; }
+grep -q -- "$PREFIX/share/tide-island call tide" "$HYPRLUA" && ok "dead block repaired to the bundled runtime" || ko "block not repaired to the bundled runtime"
+grep -q '/usr/share/tide-island call' "$HYPRLUA" && ko "stale runtime path survived the repair" || ok "stale runtime path removed"
+[[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "repair leaves a single block" || ko "repair duplicated the block"
+[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]] && ok "repaired block carries all 13 bindings" || ko "repaired block has $(grep -c 'hl\.bind(' "$HYPRLUA") bindings"
+jq -e '.shortcutBinding.createdByUs == true' "$STATE/installed.json" >/dev/null 2>&1 && ok "repaired block is now claimed by the plugin" || ko "repair did not claim the block"
+grep -q 'hl.workspace\|hl.config' "$HYPRLUA" && ok "repair preserved unrelated hyprland.lua content" || ko "repair damaged hyprland.lua"
+
 echo "  unrelated user keybindings survive install, repeat install and uninstall"
 mkdir -p "$HOME/.config/hypr"
 cat >"$HOME/.config/hypr/bindings.lua" <<'LUA'

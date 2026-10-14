@@ -152,6 +152,38 @@ extract_block() {
   ' "$1"
 }
 
+# Print $1 (a file) with the managed block removed.
+strip_block() {
+  [[ -f $1 ]] || return 0
+  awk -v b="$BEGIN_MARKER" -v e="$END_MARKER" '
+    $0 == b { skip = 1 }
+    !skip { print }
+    $0 == e { skip = 0 }
+  ' "$1"
+}
+
+# True when the block's bind commands exist but every Quickshell "-p <dir>" they
+# reference is gone from disk — a dead block (e.g. the settings app writes the
+# system path /usr/share/tide-island while this plugin runs a bundled runtime).
+# A block with no resolvable path is left alone rather than second-guessed.
+block_points_nowhere() { # $1 = block text
+  local paths p seen=0
+  paths="$(printf '%s\n' "$1" | grep -oE ' -p [^ ]+' | awk '{print $2}' | sort -u)"
+  [[ -n $paths ]] || return 1
+  while IFS= read -r p; do
+    [[ -n $p ]] || continue
+    seen=1
+    [[ -d $p ]] && return 1
+  done <<<"$paths"
+  (( seen ))
+}
+
+# Append the generated block to $2, keeping exactly one blank line before it.
+append_block() { # $1 = block, $2 = file
+  [[ -s $2 ]] || { printf '%s\n' "$1" >>"$2"; return 0; }
+  printf '\n%s\n' "$1" >>"$2"
+}
+
 state_json() { # wired createdByUs blockSha qmlPath backup
   jq -n \
     --argjson wired "$1" \
@@ -197,13 +229,22 @@ if [[ -f $INSTALLED_FILE ]]; then
 fi
 
 existing="$(extract_block "$config")"
+repair=0
 if [[ -n $existing ]]; then
-  # A block is already there (settings app, or a previous install). Never
-  # duplicate or overwrite it; remember whether it was ours to begin with.
-  block_sha="${prior_sha:-$(sha_of "$existing")}"
-  log "managed shortcut block already present in $config; leaving it untouched."
-  state_json true "$prior_ours" "$block_sha" "$qml_path" ""
-  exit 0
+  # A block is already there (settings app, or a previous install). A block whose
+  # bind commands point at a runtime that no longer exists is dead, so repair it
+  # rather than preserve something that cannot work; otherwise leave it exactly
+  # as-is (never duplicate or overwrite a working/app-edited block), remembering
+  # whether it was ours to begin with.
+  if block_points_nowhere "$existing"; then
+    repair=1
+    log "managed block in $config points at a missing runtime; repairing it from the plugin defaults."
+  else
+    block_sha="${prior_sha:-$(sha_of "$existing")}"
+    log "managed shortcut block already present in $config; leaving it untouched."
+    state_json true "$prior_ours" "$block_sha" "$qml_path" ""
+    exit 0
+  fi
 fi
 
 require_bindings
@@ -214,12 +255,13 @@ backup="$BACKUPS/$(date +%Y%m%d-%H%M%S).hyprland.lua"
 cp "$config" "$backup"
 log "backed up $config -> $backup"
 
-was_empty=1
-[[ -s $config ]] && was_empty=0
-{
-  (( was_empty )) || printf '\n'
-  printf '%s\n' "$block"
-} >>"$config"
-log "wired the island shortcuts into $config (apply with hyprctl reload)."
+if (( repair )); then
+  strip_block "$config" >"$config.tmp" && mv "$config.tmp" "$config"
+  append_block "$block" "$config"
+  log "repaired the island shortcuts in $config (apply with hyprctl reload)."
+else
+  append_block "$block" "$config"
+  log "wired the island shortcuts into $config (apply with hyprctl reload)."
+fi
 
 state_json true true "$(sha_of "$block")" "$qml_path" "$backup"
