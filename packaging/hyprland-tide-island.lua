@@ -17,4 +17,12 @@ if o and hl then
 
   o.bind("SUPER + SHIFT + SPACE", "Toggle top bar and Tide Island",
     "~/.local/bin/omarchy-tide-island-toggle")
+
+  -- Keep the Tide Island Settings (config) app floating and centered
+  hl.windowrulev2("float,class:^(tide-island-config-app)$")
+  hl.windowrulev2("float,title:^(Tide Island Config Application|Tide Island Settings)$")
+  hl.windowrulev2("center,class:^(tide-island-config-app)$")
+  hl.windowrulev2("center,title:^(Tide Island Config Application|Tide Island Settings)$")
+  hl.windowrulev2("noanim,class:^(tide-island-config-app)$")
+  hl.windowrulev2("noanim,title:^(Tide Island Config Application|Tide Island Settings)$")
 end

@@ -19,7 +19,7 @@
         { "mods": "SUPER ALT", "key": "I", "target": "island", "method": "toggle" },
         { "mods": "", "key": "", "target": "overview", "method": "toggle" },
         { "mods": "", "key": "", "target": "tide", "method": "swipeRight" },
-        { "mods": "", "key": "", "target": "tide", "method": "toggleWallpaperPicker" },
+        { "mods": "SUPER ALT", "key": "W", "target": "tide", "method": "toggleWallpaperPicker" },
         { "mods": "", "key": "", "target": "tide", "method": "toggleWeather" }
     ]
 }

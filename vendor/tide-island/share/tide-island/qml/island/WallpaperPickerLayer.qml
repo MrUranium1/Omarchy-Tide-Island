@@ -33,6 +33,27 @@ FocusScope {
     property int thumbnailHeight: 360
     property int thumbnailQuality: 80
 
+    // ── Omarchy integration (added by the omarchy-tide-island plugin) ────────
+    // When Omarchy is present the picker lists the current theme's backgrounds
+    // and applies them through Omarchy, so both interfaces stay in sync. It
+    // also exposes a Themes tab that switches Omarchy themes. Absent Omarchy,
+    // everything falls back to the original library-path behaviour.
+    property bool omarchyMode: false
+    property string mode: "wallpapers"
+    property string omarchyThemeSlug: ""
+    property string omarchyThemeName: ""
+    property string omarchyCurrentBackground: ""
+    property var omarchyBackgroundDirs: []
+    property bool stateProbed: false
+    property bool themesLoaded: false
+    property bool themesLoading: false
+    property string latestAppliedTheme: ""
+
+    readonly property string bridgeScript: {
+        const candidate = Qt.resolvedUrl("../../scripts/omarchy-bridge.sh").toString();
+        return candidate.startsWith("file://") ? decodeURIComponent(candidate.substring(7)) : candidate;
+    }
+
     property bool wallpapersLoaded: false
     property string activeWallpaper: ""
     property string latestAppliedWallpaper: ""
@@ -46,6 +67,14 @@ FocusScope {
 
     ListModel {
         id: filteredWallpapers
+    }
+
+    ListModel {
+        id: allThemes
+    }
+
+    ListModel {
+        id: filteredThemes
     }
 
     function matchesSearch(fileName) {
@@ -92,7 +121,61 @@ FocusScope {
         }
     }
 
-    onSearchQueryChanged: rebuildFilteredWallpapers()
+    function themeIndexBySlug(slug) {
+        for (let i = 0; i < allThemes.count; i++) {
+            if (allThemes.get(i).slug === slug)
+                return i;
+        }
+        return -1;
+    }
+
+    function rebuildFilteredThemes() {
+        filteredThemes.clear();
+        for (let i = 0; i < allThemes.count; i++) {
+            const item = allThemes.get(i);
+            if (matchesSearch(item.themeName))
+                filteredThemes.append(item);
+        }
+        syncCurrentThemeIndex();
+    }
+
+    function upsertTheme(record) {
+        if (!record || !record.slug)
+            return;
+        const slug = String(record.slug);
+        const modelItem = {
+            slug: slug,
+            themeName: String(record.name || slug),
+            thirdParty: record.thirdParty === true,
+            previewSource: record.previewPath ? toFileUrl(String(record.previewPath)) : ""
+        };
+        const index = themeIndexBySlug(slug);
+        if (index === -1)
+            allThemes.append(modelItem);
+        else
+            allThemes.set(index, modelItem);
+    }
+
+    function effectiveThemeSlug() {
+        return latestAppliedTheme !== "" ? latestAppliedTheme : omarchyThemeSlug;
+    }
+
+    function syncCurrentThemeIndex() {
+        const slug = effectiveThemeSlug();
+        if (slug === "")
+            return;
+        for (let i = 0; i < filteredThemes.count; i++) {
+            if (filteredThemes.get(i).slug === slug) {
+                themesView.currentIndex = i;
+                return;
+            }
+        }
+    }
+
+    onSearchQueryChanged: {
+        rebuildFilteredWallpapers();
+        rebuildFilteredThemes();
+    }
     property var pendingThumbnails: []
     property var pendingThumbnailKeys: ({})
     property bool thumbnailInFlight: false
@@ -102,10 +185,25 @@ FocusScope {
     readonly property string effectiveActiveWallpaper: latestAppliedWallpaper !== "" ? latestAppliedWallpaper : activeWallpaper
     readonly property string cacheRoot: localPath(StandardPaths.writableLocation(StandardPaths.GenericCacheLocation))
         + "/quickshell/dynamic_island/wallpaper-picker"
+
+    // Directories the wallpaper scan reads. Under Omarchy these are the current
+    // theme's background directories (user extras first); otherwise the single
+    // configured library path, preserving the original behaviour.
+    readonly property var scanDirs: {
+        if (root.omarchyMode && root.omarchyBackgroundDirs && root.omarchyBackgroundDirs.length > 0)
+            return root.omarchyBackgroundDirs;
+        return root.wallpaperDir !== "" ? [root.wallpaperDir] : [];
+    }
+    readonly property var scanCommand: {
+        const base = ["python3", "-c", root.scanScript, root.cacheRoot,
+            String(root.thumbnailWidth), String(root.thumbnailHeight),
+            String(root.thumbnailQuality)];
+        return base.concat(root.scanDirs);
+    }
     readonly property string scanScript: "import hashlib,json,os,sys\n"
         + "cache_dir=sys.argv[1]\n"
-        + "wallpaper_dir=os.path.expanduser(sys.argv[2])\n"
-        + "tw,th,quality=sys.argv[3],sys.argv[4],sys.argv[5]\n"
+        + "tw,th,quality=sys.argv[2],sys.argv[3],sys.argv[4]\n"
+        + "dirs=[os.path.expanduser(d) for d in sys.argv[5:] if d]\n"
         + "exts={'.jpg','.jpeg','.png','.webp','.gif','.avif','.tiff','.bmp'}\n"
         + "index_path=os.path.join(cache_dir,'wallpapers.json')\n"
         + "os.makedirs(cache_dir,exist_ok=True)\n"
@@ -113,6 +211,7 @@ FocusScope {
         + "    key='{}|{}|{}|{}x{}|q{}'.format(path,st.st_mtime_ns,st.st_size,tw,th,quality)\n"
         + "    return os.path.join(cache_dir,'wallpaper-'+hashlib.sha1(key.encode('utf-8','surrogateescape')).hexdigest()[:24]+'.jpg')\n"
         + "def record(path):\n"
+        + "    path=os.path.realpath(path)\n"
         + "    st=os.stat(path)\n"
         + "    cache_path=thumb_path(path,st)\n"
         + "    return {'filePath':path,'fileName':os.path.basename(path),'cachePath':cache_path,'cacheAvailable':os.path.isfile(cache_path),'mtime':st.st_mtime_ns,'size':st.st_size}\n"
@@ -134,13 +233,19 @@ FocusScope {
         + "    pass\n"
         + "emit('index',cached)\n"
         + "fresh=[]\n"
-        + "if os.path.isdir(wallpaper_dir):\n"
-        + "    for entry in sorted(os.scandir(wallpaper_dir),key=lambda e:e.name.lower()):\n"
-        + "        if entry.is_file() and os.path.splitext(entry.name)[1].lower() in exts:\n"
-        + "            try:\n"
-        + "                fresh.append(record(entry.path))\n"
-        + "            except OSError:\n"
-        + "                pass\n"
+        + "seen=set()\n"
+        + "for wallpaper_dir in dirs:\n"
+        + "    if os.path.isdir(wallpaper_dir):\n"
+        + "        for entry in sorted(os.scandir(wallpaper_dir),key=lambda e:e.name.lower()):\n"
+        + "            if entry.is_file() and os.path.splitext(entry.name)[1].lower() in exts:\n"
+        + "                try:\n"
+        + "                    real=os.path.realpath(entry.path)\n"
+        + "                    if real in seen:\n"
+        + "                        continue\n"
+        + "                    seen.add(real)\n"
+        + "                    fresh.append(record(real))\n"
+        + "                except OSError:\n"
+        + "                    pass\n"
         + "emit('scan',fresh)\n"
         + "try:\n"
         + "    tmp=index_path+'.tmp'\n"
@@ -188,10 +293,7 @@ FocusScope {
 
     onShowConditionChanged: {
         if (showCondition) {
-            if (!wallpapersLoaded)
-                startScan();
-            else
-                syncCurrentIndex();
+            root.probeOmarchy();
             root.grabKeyboardFocus();
         } else {
             releaseResources();
@@ -230,6 +332,13 @@ FocusScope {
             applyProcess.running = false;
         if (customApplyProcess.running)
             customApplyProcess.running = false;
+        if (omarchyBackgroundApplyProcess.running)
+            omarchyBackgroundApplyProcess.running = false;
+        if (themesProcess.running)
+            themesProcess.running = false;
+        if (themeApplyProcess.running)
+            themeApplyProcess.running = false;
+        themesLoading = false;
         pendingThumbnails = [];
         pendingThumbnailKeys = ({});
         thumbnailInFlight = false;
@@ -289,6 +398,107 @@ FocusScope {
         return transitionTypes.indexOf(text) >= 0 ? text : "center";
     }
 
+    // ── Omarchy probing and theme list (plugin addition) ─────────────────────
+    function probeOmarchy() {
+        stateProbed = false;
+        if (omarchyStateProcess.running)
+            omarchyStateProcess.running = false;
+        omarchyStateProcess.running = true;
+    }
+
+    function applyOmarchyState(text) {
+        stateProbed = true;
+        let parsed = null;
+        try {
+            parsed = JSON.parse(String(text).trim());
+        } catch (error) {
+            parsed = null;
+        }
+        const previousSlug = omarchyThemeSlug;
+        omarchyMode = !!(parsed && parsed.omarchy);
+        omarchyThemeSlug = parsed && parsed.currentSlug ? String(parsed.currentSlug) : "";
+        omarchyThemeName = parsed && parsed.currentName ? String(parsed.currentName) : "";
+        omarchyCurrentBackground = parsed && parsed.currentBackground ? String(parsed.currentBackground) : "";
+        omarchyBackgroundDirs = parsed && Array.isArray(parsed.backgroundDirs) ? parsed.backgroundDirs : [];
+        // A theme change (made here or elsewhere) means the background set moved.
+        if (omarchyThemeSlug !== previousSlug) {
+            wallpapersLoaded = false;
+            latestAppliedTheme = "";
+        }
+        if (root.mode === "themes")
+            ensureThemesLoaded();
+        else if (!wallpapersLoaded)
+            startScan();
+        else
+            syncCurrentIndex();
+    }
+
+    function switchMode(nextMode) {
+        if (nextMode === root.mode)
+            return;
+        root.mode = nextMode;
+        if (nextMode === "themes") {
+            ensureThemesLoaded();
+        } else {
+            if (!wallpapersLoaded)
+                startScan();
+            else
+                syncCurrentIndex();
+        }
+    }
+
+    function ensureThemesLoaded() {
+        if (themesLoaded || themesLoading)
+            return;
+        themesLoading = true;
+        if (themesProcess.running)
+            themesProcess.running = false;
+        themesProcess.running = true;
+    }
+
+    function finishThemes() {
+        themesLoading = false;
+        themesLoaded = true;
+        syncCurrentThemeIndex();
+    }
+
+    function resetThemes() {
+        allThemes.clear();
+        filteredThemes.clear();
+        themesLoaded = false;
+    }
+
+    function applyTheme(slug) {
+        if (slug === "")
+            return;
+        latestAppliedTheme = slug;
+        if (themeApplyProcess.running)
+            themeApplyProcess.running = false;
+        themeApplyProcess.themeName = slug;
+        themeApplyProcess.running = true;
+    }
+
+    function handleThemeApplied(slug, ok) {
+        if (ok) {
+            omarchyThemeSlug = slug;
+            wallpapersLoaded = false;
+            resetThemes();
+            probeOmarchy();
+        } else {
+            latestAppliedTheme = "";
+        }
+    }
+
+    function isActiveWallpaper(filePath) {
+        if (root.omarchyMode)
+            return filePath === root.omarchyCurrentBackground;
+        return filePath === root.effectiveActiveWallpaper;
+    }
+
+    function activeView() {
+        return root.mode === "themes" ? themesView : pathView;
+    }
+
     function enqueueThumbnail(sourcePath, cachePath) {
         if (!root.showCondition || sourcePath === "" || cachePath === "")
             return;
@@ -327,6 +537,11 @@ FocusScope {
         if (!record || !record.filePath)
             return;
 
+        // In Omarchy mode the cached index belongs to whatever theme was active
+        // during the previous scan, so ignore it and wait for the fresh scan.
+        if (root.omarchyMode && record.phase === "index")
+            return;
+
         const filePath = String(record.filePath);
         const cachePath = String(record.cachePath || "");
         const cacheRevision = Number(record.mtime || 0);
@@ -356,10 +571,11 @@ FocusScope {
     }
 
     function syncCurrentIndex() {
-        if (root.effectiveActiveWallpaper === "")
+        const active = root.omarchyMode ? root.omarchyCurrentBackground : root.effectiveActiveWallpaper;
+        if (active === "")
             return;
         for (let i = 0; i < filteredWallpapers.count; i++) {
-            if (filteredWallpapers.get(i).filePath === root.effectiveActiveWallpaper) {
+            if (filteredWallpapers.get(i).filePath === active) {
                 pathView.currentIndex = i;
                 return;
             }
@@ -377,11 +593,15 @@ FocusScope {
     }
 
     function moveNext() {
-        pathView.incrementCurrentIndex();
+        const view = root.activeView();
+        if (view)
+            view.incrementCurrentIndex();
     }
 
     function movePrevious() {
-        pathView.decrementCurrentIndex();
+        const view = root.activeView();
+        if (view)
+            view.decrementCurrentIndex();
     }
 
     Keys.onPressed: event => {
@@ -408,8 +628,12 @@ FocusScope {
             break;
         case Qt.Key_Return:
         case Qt.Key_Enter:
-            if (filteredWallpapers.count > 0)
+            if (root.mode === "themes") {
+                if (filteredThemes.count > 0)
+                    root.applyTheme(filteredThemes.get(themesView.currentIndex).slug);
+            } else if (filteredWallpapers.count > 0) {
                 root.applyWallpaper(filteredWallpapers.get(pathView.currentIndex).filePath);
+            }
             event.accepted = true;
             break;
         }
@@ -432,6 +656,16 @@ FocusScope {
             applyProcess.running = false;
         if (customApplyProcess.running)
             customApplyProcess.running = false;
+        if (omarchyBackgroundApplyProcess.running)
+            omarchyBackgroundApplyProcess.running = false;
+
+        // Under Omarchy the wallpaper is applied through Omarchy so the shell's
+        // background plugin and the `current/background` symlink stay in step.
+        if (root.omarchyMode) {
+            omarchyBackgroundApplyProcess.backgroundPath = filePath;
+            omarchyBackgroundApplyProcess.running = true;
+            return;
+        }
         if (useCustomCommand) {
             customApplyProcess.wallpaperPath = filePath;
             customApplyProcess.targetPath = targetPath;
@@ -447,7 +681,7 @@ FocusScope {
 
     Process {
         id: scanProcess
-        command: ["python3", "-c", root.scanScript, root.cacheRoot, root.wallpaperDir, String(root.thumbnailWidth), String(root.thumbnailHeight), String(root.thumbnailQuality)]
+        command: root.scanCommand
         stdout: SplitParser {
             onRead: data => {
                 if (!root.acceptingScanResults)
@@ -465,6 +699,59 @@ FocusScope {
             root.wallpapersLoaded = true;
             root.syncCurrentIndex();
             root.startNextThumbnail();
+        }
+    }
+
+    // ── Omarchy bridge processes (plugin addition) ───────────────────────────
+    Process {
+        id: omarchyStateProcess
+        command: ["bash", root.bridgeScript, "state"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: root.applyOmarchyState(this.text)
+        }
+    }
+
+    Process {
+        id: themesProcess
+        command: ["bash", root.bridgeScript, "themes"]
+        running: false
+        stdout: SplitParser {
+            onRead: data => {
+                try {
+                    root.upsertTheme(JSON.parse(data));
+                } catch (error) {
+                }
+            }
+        }
+        onExited: root.finishThemes()
+    }
+
+    Process {
+        id: themeApplyProcess
+        property string themeName: ""
+        command: ["bash", root.bridgeScript, "apply-theme", themeName]
+        running: false
+        onExited: function(exitCode) {
+            root.handleThemeApplied(themeName, exitCode === 0);
+        }
+    }
+
+    Process {
+        id: omarchyBackgroundApplyProcess
+        property string backgroundPath: ""
+        command: ["bash", root.bridgeScript, "apply-background", backgroundPath]
+        running: false
+        onExited: function(exitCode) {
+            running = false;
+            if (exitCode === 0) {
+                root.omarchyCurrentBackground = backgroundPath;
+                root.wallpaperApplySucceeded(backgroundPath);
+            }
+            if (root.closeAfterApply) {
+                root.closeAfterApply = false;
+                root.closeRequested();
+            }
         }
     }
 
@@ -593,7 +880,7 @@ FocusScope {
 
             Rectangle {
                 id: searchBg
-                width: searchBar.expanded ? parent.width : 34
+                width: searchBar.expanded ? (searchBar.width - (root.omarchyMode ? tabsRow.width : 0)) : 34
                 height: 34
                 anchors.right: parent.right
                 radius: 10
@@ -664,7 +951,7 @@ FocusScope {
 
             Text {
                 visible: searchBar.expanded && searchInput.text === ""
-                text: "Search wallpapers…"
+                text: root.mode === "themes" ? "Search themes…" : "Search wallpapers…"
                 font.pixelSize: 12
                 font.family: root.textFontFamily
                 color: Qt.rgba(1, 1, 1, 0.28)
@@ -699,6 +986,52 @@ FocusScope {
                     onClicked: searchInput.text = ""
                 }
             }
+
+            // ── Wallpapers / Themes switch (plugin addition) ──────────────
+            Row {
+                id: tabsRow
+                visible: root.omarchyMode
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                height: 26
+                spacing: 4
+
+                Repeater {
+                    model: [
+                        { label: "Wallpapers", value: "wallpapers" },
+                        { label: "Themes", value: "themes" }
+                    ]
+
+                    Rectangle {
+                        width: tabLabel.implicitWidth + 20
+                        height: 26
+                        radius: 8
+                        color: root.mode === modelData.value
+                            ? Qt.rgba(1, 1, 1, 0.14)
+                            : (tabMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent")
+                        border.width: root.mode === modelData.value ? 1 : 0
+                        border.color: "#60a5fa"
+
+                        Text {
+                            id: tabLabel
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: root.mode === modelData.value ? "white" : Qt.rgba(1, 1, 1, 0.5)
+                            font.pixelSize: 11
+                            font.family: root.textFontFamily
+                            font.weight: root.mode === modelData.value ? Font.Medium : Font.Normal
+                        }
+
+                        MouseArea {
+                            id: tabMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.switchMode(modelData.value)
+                        }
+                    }
+                }
+            }
         }
 
         // ── Carousel ───────────────────────────────────────────────────────
@@ -706,11 +1039,11 @@ FocusScope {
             width: parent.width
             height: root.cardAreaH
 
-            // Empty state
+            // Empty state (wallpapers)
             Column {
                 anchors.centerIn: parent
                 spacing: 8
-                visible: !root.wallpapersLoaded || filteredWallpapers.count === 0
+                visible: root.mode === "wallpapers" && (!root.wallpapersLoaded || filteredWallpapers.count === 0)
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -731,11 +1064,38 @@ FocusScope {
                 }
             }
 
+            // Empty state (themes)
+            Column {
+                anchors.centerIn: parent
+                spacing: 8
+                visible: root.mode === "themes" && (!root.themesLoaded || filteredThemes.count === 0)
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: !root.themesLoaded ? "Loading themes…" : "\uf53f"
+                    font.pixelSize: !root.themesLoaded ? 12 : 26
+                    font.family: !root.themesLoaded ? root.textFontFamily : root.iconFontFamily
+                    color: Qt.rgba(1, 1, 1, 0.22)
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: root.themesLoaded && filteredThemes.count === 0
+                    text: !root.omarchyMode
+                        ? "Omarchy was not detected\non this system"
+                        : (allThemes.count === 0 ? "No Omarchy themes found" : ("No themes match \"" + root.searchQuery + "\""))
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Qt.rgba(1, 1, 1, 0.22)
+                    font.pixelSize: 11
+                    font.family: root.textFontFamily
+                    lineHeight: 1.5
+                }
+            }
+
             PathView {
                 id: pathView
                 anchors.fill: parent
-                model: root.showCondition ? filteredWallpapers : null
-                visible: filteredWallpapers.count > 0
+                model: root.showCondition && root.mode === "wallpapers" ? filteredWallpapers : null
+                visible: root.mode === "wallpapers" && filteredWallpapers.count > 0
                 clip: false
 
                 pathItemCount: Math.min(filteredWallpapers.count, 5)
@@ -832,7 +1192,7 @@ FocusScope {
                             height: root.cardH
                             radius: 14
                             color: "transparent"
-                            border.width: (model.filePath === root.effectiveActiveWallpaper) ? 2.5 : 0
+                            border.width: root.isActiveWallpaper(model.filePath) ? 2.5 : 0
                             border.color: "#60a5fa"
                             Behavior on border.width {
                                 NumberAnimation {
@@ -868,6 +1228,174 @@ FocusScope {
                             font.pixelSize: del.isCurrent ? 11 : 10
                             font.family: root.textFontFamily
                             font.weight: del.isCurrent ? Font.Medium : Font.Normal
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideMiddle
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 150
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Themes carousel (plugin addition) ─────────────────────────
+            PathView {
+                id: themesView
+                anchors.fill: parent
+                model: root.showCondition && root.mode === "themes" ? filteredThemes : null
+                visible: root.mode === "themes" && filteredThemes.count > 0
+                clip: false
+
+                pathItemCount: Math.min(filteredThemes.count, 5)
+                cacheItemCount: 4
+                snapMode: PathView.SnapToItem
+                preferredHighlightBegin: 0.5
+                preferredHighlightEnd: 0.5
+                highlightRangeMode: PathView.StrictlyEnforceRange
+                highlightMoveDuration: 200
+
+                path: Path {
+                    startX: themesView.width / 2 - root.spacing * 2
+                    startY: root.cardPathY
+                    PathLine {
+                        x: themesView.width / 2 + root.spacing * 2
+                        y: root.cardPathY
+                    }
+                }
+
+                delegate: Item {
+                    id: themeDel
+                    readonly property bool isCurrent: PathView.isCurrentItem
+                    readonly property bool onPath: PathView.onPath
+                    readonly property bool isActive: model.slug === root.effectiveThemeSlug()
+
+                    width: root.cardW
+                    height: root.cardH + root.labelGap + root.labelH
+                    z: isCurrent ? 3 : 1
+
+                    property real sc: isCurrent ? 1.0 : onPath ? root.sideScale : 0.0
+                    Behavior on sc {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    property real op: isCurrent ? 1.0 : onPath ? 0.65 : 0.0
+                    Behavior on op {
+                        NumberAnimation {
+                            duration: 180
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Item {
+                        id: themeInner
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: parent.top
+                        width: root.cardW
+                        height: root.cardH + root.labelGap + root.labelH
+                        scale: themeDel.sc
+                        opacity: themeDel.op
+                        transformOrigin: Item.Center
+
+                        ClippingRectangle {
+                            id: themeThumb
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: root.cardW
+                            height: root.cardH
+                            radius: 14
+                            color: "#1a1a1a"
+                            antialiasing: false
+
+                            Image {
+                                anchors.fill: parent
+                                source: root.showCondition && model.previewSource ? model.previewSource : ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                smooth: true
+                                mipmap: false
+                                sourceSize: Qt.size(root.cardW * 2, root.cardH * 2)
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "#282828"
+                                    opacity: parent.status === Image.Ready ? 0 : 1
+                                    Behavior on opacity {
+                                        NumberAnimation {
+                                            duration: 200
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Active-theme border
+                        Rectangle {
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: root.cardW
+                            height: root.cardH
+                            radius: 14
+                            color: "transparent"
+                            border.width: themeDel.isActive ? 2.5 : 0
+                            border.color: "#60a5fa"
+                            Behavior on border.width {
+                                NumberAnimation {
+                                    duration: 150
+                                }
+                            }
+                        }
+
+                        // Third-party badge
+                        Rectangle {
+                            visible: model.thirdParty
+                            anchors.top: themeThumb.top
+                            anchors.left: themeThumb.left
+                            anchors.margins: 8
+                            width: badgeText.implicitWidth + 12
+                            height: 18
+                            radius: 9
+                            color: Qt.rgba(0, 0, 0, 0.55)
+
+                            Text {
+                                id: badgeText
+                                anchors.centerIn: parent
+                                text: "3rd-party"
+                                color: Qt.rgba(1, 1, 1, 0.8)
+                                font.pixelSize: 9
+                                font.family: root.textFontFamily
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: root.cardW
+                            height: root.cardH
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (themeDel.isCurrent)
+                                    root.applyTheme(model.slug);
+                                else
+                                    themesView.currentIndex = index;
+                            }
+                        }
+
+                        Text {
+                            anchors.top: themeThumb.bottom
+                            anchors.topMargin: root.labelGap
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: root.cardW - 4
+                            text: model.themeName
+                            color: themeDel.isCurrent ? "white" : Qt.rgba(1, 1, 1, 0.50)
+                            font.pixelSize: themeDel.isCurrent ? 11 : 10
+                            font.family: root.textFontFamily
+                            font.weight: themeDel.isCurrent ? Font.Medium : Font.Normal
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideMiddle
                             Behavior on color {

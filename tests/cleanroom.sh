@@ -340,7 +340,7 @@ PREFIX="$HOME/.local/share/omarchy-tide-island"
 grep -q -- '-- Tide Island shortcuts: begin (managed by Tide Island Config App).' "$HYPRLUA" \
   && ok "install writes the managed shortcut block" || ko "no shortcut block written"
 [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 ]] && ok "block written exactly once" || ko "block duplicated"
-[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 12 ]] && ok "all 12 island bindings present" || ko "expected 12 bindings, found $(grep -c 'hl\.bind(' "$HYPRLUA")"
+[[ "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]] && ok "all 13 island bindings present" || ko "expected 13 bindings, found $(grep -c 'hl\.bind(' "$HYPRLUA")"
 grep -q 'call island toggle' "$HYPRLUA" && ok "island toggle binding present" || ko "island toggle binding missing"
 grep -q -- "$PREFIX/share/tide-island call tide swipeLeft" "$HYPRLUA" \
   && ok "bindings point at the installed QML runtime" || ko "bindings use the wrong QML path"
@@ -350,7 +350,7 @@ jq -e '.shortcutBinding.createdByUs == true and .shortcutBinding.wired == true' 
 
 echo "  repeated install keeps a single block"
 (cd "$ROOT" && bash install.sh) >"$SB/k2.log" 2>&1 && ok "repeat install exits 0" || ko "repeat install failed"
-if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 12 ]]; then
+if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$HYPRLUA")" == 13 ]]; then
   ok "repeat install leaves exactly one block"
 else
   ko "repeat install changed the block"

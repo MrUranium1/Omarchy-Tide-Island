@@ -42,19 +42,34 @@ source code and must be distributed under Tide Island's license.
 - The patch does not change Tide Island's licensing: applying or redistributing
   it applies only to Tide Island's GPL-3.0-only code as normal.
 
+## Derived: Tide Island Omarchy integration (GPL-3.0-only)
+
+`vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh` (new)
+`vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml` (modified)
+`patches/tide/omarchy-theme-integration.patch` (record of the delta)
+
+These add Omarchy theme/wallpaper integration to the bundled Tide Island runtime
+(see `vendor/tide-island/PROVENANCE.md`, "Plugin additions"). They are derived
+from Tide Island source code and are distributed under Tide Island's
+GPL-3.0-only license, not under this repository's MIT license.
+
+- Source: https://github.com/enhaoswen/Tide-island (Tide Island, version 1.0.41)
+- License: **GPL-3.0-only** (`LICENSES/GPL-3.0-only.txt`)
+
 ## Bundled: Tide Island runtime (GPL-3.0-only)
 
-`vendor/tide-island/` is an unmodified copy of the Tide Island 1.0.41 runtime
-(launcher script, settings GUI, QML tree, compiled `TideIsland`/`IslandBackend`
-QML modules, lyrics backend). The plugin installs it, unprivileged, into the
-user's `~/.local/share/omarchy-tide-island` so the island works without the
-user installing the `tide-island` package.
+`vendor/tide-island/` is a copy of the Tide Island 1.0.41 runtime (launcher
+script, settings GUI, QML tree, compiled `TideIsland`/`IslandBackend` QML
+modules, lyrics backend), aside from the two Omarchy-integration files listed
+above. The plugin installs it, unprivileged, into the user's
+`~/.local/share/omarchy-tide-island` so the island works without the user
+installing the `tide-island` package.
 
 - Source: https://github.com/enhaoswen/Tide-island (Tide Island, version 1.0.41)
 - License: **GPL-3.0-only** (`LICENSES/GPL-3.0-only.txt`)
 - See `vendor/tide-island/PROVENANCE.md` for the exact file list, the
-  corresponding-source note, and how the settings GUI is built. No source
-  changes were made by this project.
+  corresponding-source note, the plugin additions, and how the settings GUI is
+  built.
 
 ## Runtime dependency: Quickshell (LGPL-3.0-only)
 

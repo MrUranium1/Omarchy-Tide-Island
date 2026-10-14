@@ -18,6 +18,8 @@ lib/qt6/qml/TideIsland/             QML module (incl. the config-app QML)
 lib/qt6/qml/IslandBackend/          QML module (qmldir + plugin)
 share/tide-island/                  QML tree, lyrics backend (bin/lyricsmpris),
                                     and helper scripts
+                                    (incl. scripts/omarchy-bridge.sh, added by
+                                    this plugin — see "Plugin additions")
 share/applications/tide-island.desktop
 share/applications/tide-island-config.desktop
 ```
@@ -28,14 +30,35 @@ share/applications/tide-island-config.desktop
 
 ## Corresponding source
 
-The bundled files are unmodified copies of the upstream 1.0.41 build. Their
-corresponding source is the upstream repository above; no source changes were
-made by this project. See the GPL-3.0-only text for the license terms.
+The bundled files are unmodified copies of the upstream 1.0.41 build, with the
+single exception described under "Plugin additions" below. Their corresponding
+source is the upstream repository above; see the GPL-3.0-only text for the
+license terms.
 
-The one exception is `bin/tide-island-config-app`, which is compiled from the
-upstream 1.0.41 source tarball (`Tide-island-app/`, the upstream CMake build,
-`-DCMAKE_INSTALL_PREFIX=/usr`, release build, no patches) rather than copied
-from a binary package. Its own QML is embedded in the binary as Qt resources;
-`share/applications/tide-island-config.desktop` differs from upstream only in
-that `Exec=tide-island-config-app` resolves via `PATH` instead of a hardcoded
-`/usr/bin/` prefix, so the same entry works for the bundled prefix.
+The one exception among the copied files is `bin/tide-island-config-app`, which
+is compiled from the upstream 1.0.41 source tarball (`Tide-island-app/`, the
+upstream CMake build, `-DCMAKE_INSTALL_PREFIX=/usr`, release build, no patches)
+rather than copied from a binary package. Its own QML is embedded in the binary
+as Qt resources; `share/applications/tide-island-config.desktop` differs from
+upstream only in that `Exec=tide-island-config-app` resolves via `PATH` instead
+of a hardcoded `/usr/bin/` prefix, so the same entry works for the bundled
+prefix.
+
+## Plugin additions
+
+This plugin adds Omarchy theme/wallpaper integration to the bundled runtime.
+Two things differ from upstream 1.0.41:
+
+- `share/tide-island/scripts/omarchy-bridge.sh` — **new file**, written by this
+  plugin. A small, side-effect-free interface to Omarchy's theme state and its
+  `omarchy-theme-set` / `omarchy-theme-bg-set` commands.
+- `share/tide-island/qml/island/WallpaperPickerLayer.qml` — **modified**. When
+  Omarchy is detected the picker lists the current theme's backgrounds (applied
+  through Omarchy, so both interfaces stay in sync) and gains a Themes tab that
+  switches themes. Without Omarchy it behaves exactly as upstream.
+
+Both are copied verbatim to the install prefix, so no install-time patching is
+involved. The full delta from upstream is recorded for auditability at
+`patches/tide/omarchy-theme-integration.patch` (paths relative to this
+directory; apply with `patch -p1`). These files remain under the same
+GPL-3.0-only license as the rest of the runtime.

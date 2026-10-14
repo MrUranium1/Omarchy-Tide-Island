@@ -43,12 +43,13 @@ jq -e '
     ["SUPER ALT","O","tide","toggleFileShelf"],
     ["SUPER ALT","V","tide","toggleClipboard"],
     ["SUPER ALT","D","tide","toggleCalendar"],
-    ["SUPER ALT","I","island","toggle"]
+    ["SUPER ALT","I","island","toggle"],
+    ["SUPER ALT","W","tide","toggleWallpaperPicker"]
   ] | sort)
   and ([.shortcutBindings[] | select(.key == "") | .method] | sort
-       == ["swipeRight","toggle","toggleWallpaperPicker","toggleWeather"])
+       == ["swipeRight","toggle","toggleWeather"])
 ' "$ROOT/default/tide-userconfig.json" >/dev/null \
-  && t "default Tide shortcuts are the 12 island bindings" && ok || ko
+  && t "default Tide shortcuts are the 13 island bindings" && ok || ko
 
 echo "  entry points exist"
 for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json" \
@@ -71,6 +72,7 @@ for f in "vendor/tide-island/VERSION" "vendor/tide-island/PROVENANCE.md" \
          "vendor/tide-island/lib/qt6/qml/TideIsland/qmldir" \
          "vendor/tide-island/lib/qt6/qml/IslandBackend/qmldir" \
          "vendor/tide-island/share/tide-island/shell.qml" \
+         "vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh" \
          "vendor/tide-island/share/applications/tide-island.desktop" \
          "vendor/tide-island/share/applications/tide-island-config.desktop" \
          "LICENSES/GPL-3.0-only.txt"; do
@@ -138,6 +140,73 @@ fi
 jq -e '.shortcutBindings[] | select(.target == "island" and .method == "toggle" and .key == "I")' \
   "$ROOT/default/tide-userconfig.json" >/dev/null \
   && t "default userconfig carries the island binding that gets wired" && ok || ko
+
+echo "  omarchy-bridge.sh contract"
+BRIDGE="$ROOT/vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh"
+bash -n "$BRIDGE" && t "omarchy-bridge.sh parses" && ok || ko
+
+# A synthetic Omarchy home + fake omarchy-theme-* binaries.
+OF="$tmp/omarchy-home"
+OROOT="$tmp/omarchy-root"
+OBIN="$tmp/omarchy-bin"
+mkdir -p "$OF/.config/omarchy/themes/user-theme/backgrounds" \
+         "$OF/.local/state/omarchy/current/theme/backgrounds" \
+         "$OF/.config/omarchy/backgrounds/user-theme" \
+         "$OROOT/themes/stock-theme" \
+         "$OBIN"
+printf 'user-theme\n' >"$OF/.local/state/omarchy/current/theme.name"
+printf 'img' >"$OF/.local/state/omarchy/current/theme/backgrounds/1-a.jpg"
+printf 'img' >"$OF/.config/omarchy/backgrounds/user-theme/x.jpg"
+printf 'img' >"$OF/.config/omarchy/themes/user-theme/preview.png"
+printf 'img' >"$OROOT/themes/stock-theme/preview.png"
+ln -sf "$OF/.local/state/omarchy/current/theme/backgrounds/1-a.jpg" \
+       "$OF/.local/state/omarchy/current/background"
+printf '#!/usr/bin/env bash\nprintf "set:%%s\\n" "$*" >>"$OMARCHY_CALLS"\n' >"$OBIN/omarchy-theme-set"
+printf '#!/usr/bin/env bash\nprintf "bg:%%s\\n" "$*" >>"$OMARCHY_CALLS"\n' >"$OBIN/omarchy-theme-bg-set"
+chmod +x "$OBIN/"*
+: >"$tmp/omarchy-calls"
+
+run_bridge() { # extra env via caller; keeps HOME/OMARCHY_PATH isolated
+  env HOME="$OF" OMARCHY_PATH="$OROOT" OMARCHY_CALLS="$tmp/omarchy-calls" \
+      PATH="$OBIN:$PATH" bash "$BRIDGE" "$@"
+}
+
+run_bridge present && t "bridge reports Omarchy present when its tooling exists" && ok \
+  || ko
+state="$(run_bridge state)"
+echo "$state" | jq -e '.omarchy == true and .currentSlug == "user-theme"
+  and .currentName == "User Theme"
+  and (.currentBackground | endswith("1-a.jpg"))
+  and (.backgroundDirs | length == 2)' >/dev/null \
+  && t "bridge state reports the current theme and both background dirs" && ok || ko
+themes="$(run_bridge themes)"
+echo "$themes" | jq -s -e '
+  (map(select(.slug == "stock-theme" and .thirdParty == false)) | length == 1)
+  and (map(select(.slug == "user-theme" and .thirdParty == true)) | length == 1)
+  and (map(select(.slug == "user-theme"))[0].previewPath | endswith("preview.png"))' >/dev/null \
+  && t "bridge lists stock and third-party themes with previews" && ok || ko
+backgrounds="$(run_bridge backgrounds)"
+echo "$backgrounds" | jq -s -e '
+  (map(select(.fileName == "1-a.jpg" and .current == true)) | length == 1)
+  and (map(select(.fileName == "x.jpg")) | length == 1)' >/dev/null \
+  && t "bridge lists current-theme backgrounds and flags the active one" && ok || ko
+run_bridge apply-theme user-theme && grep -q '^set:user-theme$' "$tmp/omarchy-calls" \
+  && t "apply-theme delegates to omarchy-theme-set" && ok || ko
+run_bridge apply-background "$OF/.local/state/omarchy/current/theme/backgrounds/1-a.jpg" \
+  && grep -q '^bg:.*1-a.jpg$' "$tmp/omarchy-calls" \
+  && t "apply-background delegates to omarchy-theme-bg-set" && ok || ko
+run_bridge apply-background "$tmp/does-not-exist.jpg" >/dev/null 2>&1 \
+  && ko "apply-background accepted a missing file" \
+  || { t "apply-background rejects a missing file" && ok; }
+# An isolated PATH (only bash) must make the bridge report Omarchy absent,
+# regardless of whether this machine has Omarchy installed in /usr/bin.
+mkdir -p "$tmp/cleanbin"
+ln -sf "$(command -v bash)" "$tmp/cleanbin/bash"
+if env HOME="$OF" PATH="$tmp/cleanbin" bash "$BRIDGE" present >/dev/null 2>&1; then
+  t "bridge reports absent when omarchy tooling is missing" && ko
+else
+  t "bridge reports absent when omarchy tooling is missing" && ok
+fi
 
 echo "  omarchy validates the plugin folder"
 if (cd "$ROOT" && omarchy plugin validate . >/dev/null 2>&1); then

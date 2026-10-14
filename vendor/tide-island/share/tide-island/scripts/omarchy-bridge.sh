@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+#
+# omarchy-bridge.sh
+#
+# ADDITION by the omarchy-tide-island plugin (NOT part of upstream Tide Island).
+#
+# Gives Tide Island one small, testable interface to Omarchy's theme and
+# wallpaper system so the island can list/apply the backgrounds that belong to
+# the current theme and list/apply installed themes. Omarchy stays the single
+# source of truth: reads only inspect its state, and every apply delegates to
+# omarchy-theme-set / omarchy-theme-bg-set.
+#
+# Commands:
+#   present                 Exit 0 when Omarchy's theme tooling is available.
+#   state                   One JSON object: current theme + background + the
+#                           directories that hold the theme's backgrounds.
+#   themes                  One JSON object per line, sorted by slug:
+#                           {slug,name,thirdParty,previewPath}
+#   backgrounds             One JSON object per line, sorted by name, for the
+#                           current theme: {filePath,fileName,current}
+#   apply-theme NAME|SLUG   Switch theme via Omarchy.
+#   apply-background PATH   Switch background via Omarchy.
+#
+# Logs go to stderr; stdout is pure JSON so callers can parse it line by line.
+
+set -Eeuo pipefail
+
+OMARCHY_ROOT="${OMARCHY_PATH:-/usr/share/omarchy}"
+USER_THEMES="$HOME/.config/omarchy/themes"
+STOCK_THEMES="$OMARCHY_ROOT/themes"
+STATE_DIR="$HOME/.local/state/omarchy/current"
+USER_BG_ROOT="$HOME/.config/omarchy/backgrounds"
+
+die() { printf 'omarchy-bridge: %s\n' "$*" >&2; exit 1; }
+
+title_case() {
+    # Match Omarchy's own display formatting (see omarchy-theme-list).
+    printf '%s' "${1:-}" | sed -E 's/(^|-)([a-z])/\1\u\2/g; s/-/ /g'
+}
+
+omarchy_present() {
+    command -v omarchy-theme-set >/dev/null 2>&1 || return 1
+    [[ -d $STOCK_THEMES || -d $USER_THEMES ]]
+}
+
+require_jq() {
+    command -v jq >/dev/null 2>&1 || die "jq is required for JSON output"
+}
+
+find_preview() {
+    local dir="$1" name candidate
+    for name in preview.png preview.jpg preview.jpeg preview.webp preview.gif preview.bmp; do
+        candidate="$(find -L "$dir" -maxdepth 1 -type f -iname "$name" -print -quit 2>/dev/null || true)"
+        if [[ -n $candidate ]]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    if [[ -d "$dir/backgrounds" ]]; then
+        candidate="$(find -L "$dir/backgrounds" -maxdepth 1 -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+            -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+            -print 2>/dev/null | sort | head -n 1 || true)"
+        if [[ -n $candidate ]]; then
+            printf '%s' "$candidate"
+        fi
+    fi
+    return 0
+}
+
+current_slug() {
+    if [[ -f "$STATE_DIR/theme.name" ]]; then
+        cat "$STATE_DIR/theme.name" 2>/dev/null || true
+    fi
+}
+
+current_background() {
+    readlink -f "$STATE_DIR/background" 2>/dev/null || true
+}
+
+# Print the background directories for the current theme, user extras first.
+background_dirs() {
+    local slug="$1"
+    if [[ -n $slug && -d "$USER_BG_ROOT/$slug" ]]; then
+        printf '%s\n' "$USER_BG_ROOT/$slug"
+    fi
+    if [[ -d "$STATE_DIR/theme/backgrounds" ]]; then
+        printf '%s\n' "$STATE_DIR/theme/backgrounds"
+    fi
+}
+
+cmd_present() {
+    omarchy_present
+}
+
+cmd_state() {
+    require_jq
+    local present="false" slug bg name dirs_json
+    if omarchy_present; then
+        present="true"
+    fi
+    slug="$(current_slug)"
+    bg="$(current_background)"
+    name=""
+    if [[ -n $slug ]]; then
+        name="$(title_case "$slug")"
+    fi
+    dirs_json="$(background_dirs "$slug" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+    jq -nc \
+        --argjson omarchy "$present" \
+        --arg slug "$slug" \
+        --arg name "$name" \
+        --arg bg "$bg" \
+        --argjson dirs "$dirs_json" \
+        '{omarchy: $omarchy, currentSlug: $slug, currentName: $name,
+          currentBackground: $bg, backgroundDirs: $dirs}'
+}
+
+cmd_themes() {
+    require_jq
+    local -A seen=()
+    local dir path slug preview third
+    for dir in "$USER_THEMES" "$STOCK_THEMES"; do
+        [[ -d $dir ]] || continue
+        while IFS= read -r -d '' path; do
+            slug="${path##*/}"
+            if [[ -n ${seen[$slug]:-} ]]; then
+                continue
+            fi
+            seen[$slug]=1
+            third=false
+            if [[ -d "$USER_THEMES/$slug" ]]; then
+                third=true
+            fi
+            preview="$(find_preview "$path")"
+            jq -nc \
+                --arg slug "$slug" \
+                --arg name "$(title_case "$slug")" \
+                --argjson third "$third" \
+                --arg preview "$preview" \
+                '{slug: $slug, name: $name, thirdParty: $third, previewPath: $preview}'
+        done < <(find -L "$dir" -mindepth 1 -maxdepth 1 \( -type d -o -type l \) -print0 2>/dev/null | sort -z)
+    done | sort
+}
+
+cmd_backgrounds() {
+    require_jq
+    local slug current
+    slug="$(current_slug)"
+    if [[ -z $slug ]]; then
+        return 0
+    fi
+    current="$(current_background)"
+    local -A seen=()
+    local dir path real
+    while IFS= read -r -d '' path; do
+        real="$(readlink -f "$path" 2>/dev/null || printf '%s' "$path")"
+        if [[ -n ${seen[$real]:-} ]]; then
+            continue
+        fi
+        seen[$real]=1
+        jq -nc \
+            --arg filePath "$real" \
+            --arg fileName "${real##*/}" \
+            --argjson current "$([[ $real == "$current" ]] && echo true || echo false)" \
+            '{filePath: $filePath, fileName: $fileName, current: $current}'
+    done < <(
+        while IFS= read -r dir; do
+            find -L "$dir" -maxdepth 1 -type f \
+                \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+                -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+                -print0 2>/dev/null
+        done < <(background_dirs "$slug")
+    ) | sort
+}
+
+cmd_apply_theme() {
+    local name="${1:-}"
+    if [[ -z $name ]]; then
+        die "usage: omarchy-bridge.sh apply-theme NAME|SLUG"
+    fi
+    command -v omarchy-theme-set >/dev/null 2>&1 || die "omarchy-theme-set not found"
+    omarchy-theme-set "$name"
+}
+
+cmd_apply_background() {
+    local path="${1:-}"
+    if [[ -z $path ]]; then
+        die "usage: omarchy-bridge.sh apply-background PATH"
+    fi
+    if [[ ! -f $path ]]; then
+        die "file does not exist: $path"
+    fi
+    command -v omarchy-theme-bg-set >/dev/null 2>&1 || die "omarchy-theme-bg-set not found"
+    omarchy-theme-bg-set "$path"
+}
+
+case "${1:-}" in
+    present) cmd_present ;;
+    state) shift; cmd_state "$@" ;;
+    themes) shift; cmd_themes "$@" ;;
+    backgrounds) shift; cmd_backgrounds "$@" ;;
+    apply-theme) shift; cmd_apply_theme "$@" ;;
+    apply-background) shift; cmd_apply_background "$@" ;;
+    -h | --help | "")
+        cat <<'USAGE'
+Usage: omarchy-bridge.sh COMMAND
+
+  present               exit 0 when Omarchy theme tooling is available
+  state                 JSON: current theme, background and background dirs
+  themes                JSON lines: installed Omarchy themes
+  backgrounds           JSON lines: backgrounds of the current theme
+  apply-theme NAME      switch theme via Omarchy
+  apply-background PATH switch background via Omarchy
+USAGE
+        ;;
+    *) die "unknown command: $1" ;;
+esac

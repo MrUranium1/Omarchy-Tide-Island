@@ -59,7 +59,11 @@ installs the user `tide-island.service`, adds the CLI shims, seeds the config,
 creates + patches the OSD/notification clones, wires the keybinding, and applies
 the island keybindings to `hyprland.lua`. The
 Tide Island **Settings** app is bundled too — open it from the app menu
-("Tide Island Settings") or run `tide-island-config-app`. Then the island
+("Tide Island Settings") or run `tide-island-config-app`. The bundled island
+includes an **Omarchy-aware wallpaper/theme picker** (activated by
+`SUPER + ALT + W` when the managed shortcuts are wired) that lists the
+backgrounds and themes of the current Omarchy theme, switching them via
+Omarchy's own commands so both interfaces stay in sync. Then the island
 appears whenever the bar is hidden. On a machine with no Tide config yet, it
 also seeds Tide's own `~/.config/tide-island/userconfig.json` once with the
 default island look below (existing configs are never overwritten).
@@ -103,10 +107,11 @@ Either path does all of this, safely:
 6. Applies the island keybindings to `hyprland.lua` via
    `scripts/wire-shortcuts.sh`, written into the settings app's own managed
    block so the island's `SUPER + ALT +` shortcuts (H/J/T/M/C/P/N/A/O/V/D for
-   the island views, I to toggle the island) are live on a fresh install
-   without opening the settings app. It is idempotent (an existing block is
-   never duplicated) and non-destructive (a block you or the app edited is left
-   alone); skip it with `install.sh --no-shortcuts`.
+   the island views, I to toggle the island, W to open the wallpaper/theme
+   picker) are live on a fresh install without opening the settings app. It is
+   idempotent (an existing block is never duplicated) and non-destructive (a
+   block you or the app edited is left alone); skip it with `install.sh
+   --no-shortcuts`.
 7. Reconciles Tide Island against the current bar state.
 
 Note: standing down the built-in OSD/notification overlays uses Omarchy's own
