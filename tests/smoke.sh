@@ -44,12 +44,13 @@ jq -e '
     ["SUPER ALT","V","tide","toggleClipboard"],
     ["SUPER ALT","D","tide","toggleCalendar"],
     ["SUPER ALT","I","island","toggle"],
-    ["SUPER ALT","W","tide","toggleWallpaperPicker"]
+    ["SUPER ALT","W","tide","toggleWallpaperPicker"],
+    ["SUPER ALT","Q","tide","toggleThemePicker"]
   ] | sort)
   and ([.shortcutBindings[] | select(.key == "") | .method] | sort
        == ["swipeRight","toggle","toggleWeather"])
 ' "$ROOT/default/tide-userconfig.json" >/dev/null \
-  && t "default Tide shortcuts are the 13 island bindings" && ok || ko
+  && t "default Tide shortcuts are the 14 island bindings" && ok || ko
 
 echo "  default shortcuts do not collide with Omarchy's own bindings"
 SEED="$ROOT/default/tide-userconfig.json"

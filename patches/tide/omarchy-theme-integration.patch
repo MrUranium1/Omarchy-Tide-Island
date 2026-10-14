@@ -11,11 +11,12 @@ What changes:
          bridge to Omarchy theme/background state and commands.
   * EDIT share/tide-island/qml/island/WallpaperPickerLayer.qml - when Omarchy
          is detected the picker lists the current theme backgrounds (applied
-         through Omarchy) and adds a Themes tab to switch themes.
+         through Omarchy) and adds a Themes tab to switch themes, populating
+         the preview carousel as soon as theme discovery finishes.
 
 ---
 diff --git a/share/tide-island/qml/island/WallpaperPickerLayer.qml b/share/tide-island/qml/island/WallpaperPickerLayer.qml
-index 47590f9..1c482ab 100644
+index 47590f9..551f607 100644
 --- a/share/tide-island/qml/island/WallpaperPickerLayer.qml
 +++ b/share/tide-island/qml/island/WallpaperPickerLayer.qml
 @@ -14,6 +14,7 @@ FocusScope {
@@ -34,6 +35,9 @@ index 47590f9..1c482ab 100644
              root.probeOmarchy();
              root.grabKeyboardFocus();
          } else {
+@@ -462 +464 @@ FocusScope {
+-        syncCurrentThemeIndex();
++        rebuildFilteredThemes();
 @@ -880,7 +882,7 @@ FocusScope {
  
              Rectangle {

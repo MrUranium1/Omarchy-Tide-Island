@@ -461,7 +461,7 @@ FocusScope {
     function finishThemes() {
         themesLoading = false;
         themesLoaded = true;
-        syncCurrentThemeIndex();
+        rebuildFilteredThemes();
     }
 
     function resetThemes() {
