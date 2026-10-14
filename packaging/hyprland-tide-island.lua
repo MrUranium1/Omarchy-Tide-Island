@@ -18,11 +18,12 @@ if o and hl then
   o.bind("SUPER + SHIFT + SPACE", "Toggle top bar and Tide Island",
     "~/.local/bin/omarchy-tide-island-toggle")
 
-  -- Keep the Tide Island Settings (config) app floating and centered
-  hl.windowrulev2("float,class:^(tide-island-config-app)$")
-  hl.windowrulev2("float,title:^(Tide Island Config Application|Tide Island Settings)$")
-  hl.windowrulev2("center,class:^(tide-island-config-app)$")
-  hl.windowrulev2("center,title:^(Tide Island Config Application|Tide Island Settings)$")
-  hl.windowrulev2("noanim,class:^(tide-island-config-app)$")
-  hl.windowrulev2("noanim,title:^(Tide Island Config Application|Tide Island Settings)$")
+  -- Keep the Tide Island Settings (config) app floating, centered and free of
+  -- its open animation, so it never lands in the tiling layout and cannot be
+  -- resized into a tiled slot. Match the app id and the window title (its
+  -- real title, from Tide-island-app/Main.qml) so it holds however it launches.
+  o.window({ class = "^tide-island-config-app$" },
+    { float = true, center = true, no_anim = true })
+  o.window({ title = "^Tide Island Config Application$" },
+    { float = true, center = true, no_anim = true })
 end

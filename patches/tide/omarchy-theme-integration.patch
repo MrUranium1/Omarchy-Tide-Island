@@ -211,7 +211,7 @@ What changes:
          pendingThumbnails = [];
          pendingThumbnailKeys = ({});
          thumbnailInFlight = false;
-@@ -289,6 +398,109 @@
+@@ -289,6 +398,107 @@
          return transitionTypes.indexOf(text) >= 0 ? text : "center";
      }
  
@@ -256,13 +256,11 @@ What changes:
 +        root.mode = nextMode;
 +        if (nextMode === "themes") {
 +            ensureThemesLoaded();
-+            themesView.forceActiveFocus();
 +        } else {
 +            if (!wallpapersLoaded)
 +                startScan();
 +            else
 +                syncCurrentIndex();
-+            pathView.forceActiveFocus();
 +        }
 +    }
 +
@@ -321,7 +319,7 @@ What changes:
      function enqueueThumbnail(sourcePath, cachePath) {
          if (!root.showCondition || sourcePath === "" || cachePath === "")
              return;
-@@ -327,6 +539,11 @@
+@@ -327,6 +537,11 @@
          if (!record || !record.filePath)
              return;
  
@@ -333,7 +331,7 @@ What changes:
          const filePath = String(record.filePath);
          const cachePath = String(record.cachePath || "");
          const cacheRevision = Number(record.mtime || 0);
-@@ -356,10 +573,11 @@
+@@ -356,10 +571,11 @@
      }
  
      function syncCurrentIndex() {
@@ -347,7 +345,7 @@ What changes:
                  pathView.currentIndex = i;
                  return;
              }
-@@ -377,11 +595,15 @@
+@@ -377,11 +593,15 @@
      }
  
      function moveNext() {
@@ -365,7 +363,7 @@ What changes:
      }
  
      Keys.onPressed: event => {
-@@ -408,8 +630,12 @@
+@@ -408,8 +628,12 @@
              break;
          case Qt.Key_Return:
          case Qt.Key_Enter:
@@ -379,7 +377,7 @@ What changes:
              event.accepted = true;
              break;
          }
-@@ -432,6 +658,16 @@
+@@ -432,6 +656,16 @@
              applyProcess.running = false;
          if (customApplyProcess.running)
              customApplyProcess.running = false;
@@ -396,7 +394,7 @@ What changes:
          if (useCustomCommand) {
              customApplyProcess.wallpaperPath = filePath;
              customApplyProcess.targetPath = targetPath;
-@@ -447,7 +683,7 @@
+@@ -447,7 +681,7 @@
  
      Process {
          id: scanProcess
@@ -405,7 +403,7 @@ What changes:
          stdout: SplitParser {
              onRead: data => {
                  if (!root.acceptingScanResults)
-@@ -468,6 +704,59 @@
+@@ -468,6 +702,59 @@
          }
      }
  
@@ -465,7 +463,7 @@ What changes:
      Connections {
          target: SystemServices
  
-@@ -593,7 +882,7 @@
+@@ -593,7 +880,7 @@
  
              Rectangle {
                  id: searchBg
@@ -474,7 +472,7 @@ What changes:
                  height: 34
                  anchors.right: parent.right
                  radius: 10
-@@ -664,7 +953,7 @@
+@@ -664,7 +951,7 @@
  
              Text {
                  visible: searchBar.expanded && searchInput.text === ""
@@ -483,7 +481,7 @@ What changes:
                  font.pixelSize: 12
                  font.family: root.textFontFamily
                  color: Qt.rgba(1, 1, 1, 0.28)
-@@ -699,6 +988,52 @@
+@@ -699,6 +986,52 @@
                      onClicked: searchInput.text = ""
                  }
              }
@@ -536,7 +534,7 @@ What changes:
          }
  
          // ── Carousel ───────────────────────────────────────────────────────
-@@ -706,11 +1041,11 @@
+@@ -706,11 +1039,11 @@
              width: parent.width
              height: root.cardAreaH
  
@@ -550,7 +548,7 @@ What changes:
  
                  Text {
                      anchors.horizontalCenter: parent.horizontalCenter
-@@ -731,11 +1066,38 @@
+@@ -731,11 +1064,38 @@
                  }
              }
  
@@ -591,7 +589,7 @@ What changes:
                  clip: false
  
                  pathItemCount: Math.min(filteredWallpapers.count, 5)
-@@ -832,7 +1194,7 @@
+@@ -832,7 +1192,7 @@
                              height: root.cardH
                              radius: 14
                              color: "transparent"
@@ -600,7 +598,7 @@ What changes:
                              border.color: "#60a5fa"
                              Behavior on border.width {
                                  NumberAnimation {
-@@ -871,6 +1233,175 @@
+@@ -871,6 +1231,174 @@
                              horizontalAlignment: Text.AlignHCenter
                              elide: Text.ElideMiddle
                              Behavior on color {
@@ -620,7 +618,6 @@ What changes:
 +                model: root.showCondition && root.mode === "themes" ? filteredThemes : null
 +                visible: root.mode === "themes" && filteredThemes.count > 0
 +                clip: false
-+                focus: root.mode === "themes"
 +
 +                pathItemCount: Math.min(filteredThemes.count, 5)
 +                cacheItemCount: 4
