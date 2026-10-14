@@ -87,6 +87,8 @@ Item {
     readonly property bool hyprlandNightLight: CompositorBackend.compositor === "hyprland"
     property bool focusEnabled: false
     property bool focusBusy: false
+    property bool focusToggleStateReceived: false
+    property bool focusToggleState: false
 
     property string wifiLocalInfoMessage: ""
     property string wifiLocalError: ""
@@ -418,10 +420,8 @@ Item {
             return;
 
         focusBusy = true;
-        if (focusEnabled)
-            focusDisableProcess.running = true;
-        else
-            focusEnableProcess.running = true;
+        focusToggleStateReceived = false;
+        focusToggleProcess.running = true;
     }
 
     function clearWifiPrompt() {
@@ -1159,30 +1159,34 @@ Item {
     }
 
     Process {
-        id: focusEnableProcess
-        command: ["swaync-client", "-dn"]
+        id: focusToggleProcess
+        command: ["swaync-client", "--toggle-dnd"]
         running: false
 
-        onExited: function(exitCode) {
-            controlCenter.focusBusy = false;
-            controlCenter.focusEnabled = exitCode === 0;
-            controlCenter.focusModeChanged(controlCenter.focusEnabled);
-            if (exitCode === 0)
-                controlCenter.requestNotification("Focus", "Focus enabled", "Notifications paused");
+        stdout: SplitParser {
+            onRead: function(line) {
+                const value = line.trim().toLowerCase();
+                if (value !== "true" && value !== "false")
+                    return;
+
+                controlCenter.focusToggleState = value === "true";
+                controlCenter.focusToggleStateReceived = true;
+            }
         }
-    }
-
-    Process {
-        id: focusDisableProcess
-        command: ["swaync-client", "-df"]
-        running: false
 
         onExited: function(exitCode) {
             controlCenter.focusBusy = false;
-            controlCenter.focusEnabled = false;
-            controlCenter.focusModeChanged(false);
-            if (exitCode === 0)
-                controlCenter.requestNotification("Focus", "Focus disabled", "");
+            if (exitCode !== 0 || !controlCenter.focusToggleStateReceived) {
+                controlCenter.requestNotification("Focus", "Silent mode unavailable",
+                    "Make sure SwayNotificationCenter is installed and running.");
+                return;
+            }
+
+            controlCenter.focusEnabled = controlCenter.focusToggleState;
+            controlCenter.focusModeChanged(controlCenter.focusEnabled);
+            controlCenter.requestNotification("Focus",
+                controlCenter.focusEnabled ? "Focus enabled" : "Focus disabled",
+                controlCenter.focusEnabled ? "Notifications paused" : "");
         }
     }
 

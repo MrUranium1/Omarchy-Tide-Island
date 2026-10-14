@@ -4,6 +4,8 @@ All notable changes to the mehir.tide-island plugin.
 
 ## [Unreleased]
 
+- Fixed the control center's Silent button to toggle the actual SwayNotificationCenter
+  Do Not Disturb state even when it changed outside Tide Island.
 - Added Omarchy wallpaper and theme discovery/switching to the bundled Tide
   Island picker; themes now populate the preview carousel immediately after
   discovery instead of waiting for a search edit.

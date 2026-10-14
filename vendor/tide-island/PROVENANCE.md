@@ -49,8 +49,8 @@ prefix.
 
 ## Plugin additions
 
-This plugin adds Omarchy theme/wallpaper integration to the bundled runtime.
-Two things differ from upstream 1.0.41:
+This plugin adds Omarchy theme/wallpaper integration and fixes the bundled
+control center's Silent toggle. Three things differ from upstream 1.0.41:
 
 - `share/tide-island/scripts/omarchy-bridge.sh` — **new file**, written by this
   plugin. A small, side-effect-free interface to Omarchy's theme state and its
@@ -59,10 +59,15 @@ Two things differ from upstream 1.0.41:
   Omarchy is detected the picker lists the current theme's backgrounds (applied
   through Omarchy, so both interfaces stay in sync) and gains a Themes tab that
   switches themes. Without Omarchy it behaves exactly as upstream.
+- `share/tide-island/qml/controlcenter/ControlCenterLayer.qml` — **modified**.
+  The Silent button now atomically toggles SwayNotificationCenter's current
+  Do Not Disturb state instead of choosing a direction from a potentially stale
+  cached value, and reflects the state returned by the toggle command.
 
-Both are copied verbatim to the install prefix, so no install-time patching is
-involved. The full delta from upstream is recorded for auditability at
-`patches/tide/omarchy-theme-integration.patch` (paths relative to this
-directory; apply with `patch -p1`). The modified QML remains under
+All are copied verbatim to the install prefix, so no install-time patching is
+involved. The deltas from upstream are recorded for auditability in
+`patches/tide/omarchy-theme-integration.patch` and
+`patches/tide/omarchy-silent-button-fix.patch` (paths relative to this
+directory; apply with `patch -p1`). Both modified QML files remain under
 GPL-3.0-only; the original bridge script is MIT-licensed under the repository's
 root `LICENSE`.

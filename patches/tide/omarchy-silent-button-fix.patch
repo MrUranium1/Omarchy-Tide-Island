@@ -1,0 +1,65 @@
+Tide Island Silent button fix.
+
+The control center cached the DND state at startup and chose explicit on/off
+commands from that stale value. Use SwayNotificationCenter's atomic toggle
+command and consume its reported state so clicks always toggle the actual mode.
+Paths are relative to vendor/tide-island/ (apply with -p1).
+
+---
+diff --git a/share/tide-island/qml/controlcenter/ControlCenterLayer.qml b/share/tide-island/qml/controlcenter/ControlCenterLayer.qml
+--- a/share/tide-island/qml/controlcenter/ControlCenterLayer.qml
++++ b/share/tide-island/qml/controlcenter/ControlCenterLayer.qml
+@@ -89,0 +90,2 @@
++    property bool focusToggleStateReceived: false
++    property bool focusToggleState: false
+@@ -421,4 +423,2 @@
+-        if (focusEnabled)
+-            focusDisableProcess.running = true;
+-        else
+-            focusEnableProcess.running = true;
++        focusToggleStateReceived = false;
++        focusToggleProcess.running = true;
+@@ -1162,2 +1162,2 @@
+-        id: focusEnableProcess
+-        command: ["swaync-client", "-dn"]
++        id: focusToggleProcess
++        command: ["swaync-client", "--toggle-dnd"]
+@@ -1166,8 +1166,5 @@
+-        onExited: function(exitCode) {
+-            controlCenter.focusBusy = false;
+-            controlCenter.focusEnabled = exitCode === 0;
+-            controlCenter.focusModeChanged(controlCenter.focusEnabled);
+-            if (exitCode === 0)
+-                controlCenter.requestNotification("Focus", "Focus enabled", "Notifications paused");
+-        }
+-    }
++        stdout: SplitParser {
++            onRead: function(line) {
++                const value = line.trim().toLowerCase();
++                if (value !== "true" && value !== "false")
++                    return;
+@@ -1175,4 +1172,4 @@
+-    Process {
+-        id: focusDisableProcess
+-        command: ["swaync-client", "-df"]
+-        running: false
++                controlCenter.focusToggleState = value === "true";
++                controlCenter.focusToggleStateReceived = true;
++            }
++        }
+@@ -1182,4 +1179,11 @@
+-            controlCenter.focusEnabled = false;
+-            controlCenter.focusModeChanged(false);
+-            if (exitCode === 0)
+-                controlCenter.requestNotification("Focus", "Focus disabled", "");
++            if (exitCode !== 0 || !controlCenter.focusToggleStateReceived) {
++                controlCenter.requestNotification("Focus", "Silent mode unavailable",
++                    "Make sure SwayNotificationCenter is installed and running.");
++                return;
++            }
++
++            controlCenter.focusEnabled = controlCenter.focusToggleState;
++            controlCenter.focusModeChanged(controlCenter.focusEnabled);
++            controlCenter.requestNotification("Focus",
++                controlCenter.focusEnabled ? "Focus enabled" : "Focus disabled",
++                controlCenter.focusEnabled ? "Notifications paused" : "");

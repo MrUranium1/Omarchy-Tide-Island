@@ -203,11 +203,22 @@ cp -a "$ROOT/vendor/tide-island/share" "$tmp/theme-roundtrip/"
   patch -p1 -R --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-theme-integration.patch" >/dev/null
   patch -p1 --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-theme-integration.patch" >/dev/null
 ) && t "main integration patch reverses and reapplies with zero fuzz" && ok || ko
+(
+  cd "$tmp/theme-roundtrip"
+  patch -p1 -R --batch --fuzz=0 --dry-run <"$ROOT/patches/tide/omarchy-silent-button-fix.patch" >/dev/null
+  patch -p1 -R --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-silent-button-fix.patch" >/dev/null
+  patch -p1 --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-silent-button-fix.patch" >/dev/null
+) && t "Silent button fix patch reverses and reapplies with zero fuzz" && ok || ko
 diff -qr "$tmp/theme-roundtrip/share" "$ROOT/vendor/tide-island/share" >/dev/null \
-  && t "integration patch round-trip reproduces vendored share tree byte-for-byte" && ok || ko
+  && t "integration and Silent button patches reproduce vendored share tree byte-for-byte" && ok || ko
 cmp -s "$tmp/theme-roundtrip/share/tide-island/qml/island/WallpaperPickerLayer.qml" \
   "$ROOT/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml" \
   && t "patched theme picker exactly matches vendored source" && ok || ko
+grep -q 'command: \["swaync-client", "--toggle-dnd"\]' \
+  "$tmp/theme-roundtrip/share/tide-island/qml/controlcenter/ControlCenterLayer.qml" \
+  && grep -q 'focusToggleStateReceived' \
+    "$tmp/theme-roundtrip/share/tide-island/qml/controlcenter/ControlCenterLayer.qml" \
+  && t "Silent button toggles SwayNC's current DND state and reads the result" && ok || ko
 
 echo "  bash syntax"
 while IFS= read -r -d '' f; do
