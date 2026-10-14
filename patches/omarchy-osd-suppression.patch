@@ -22,7 +22,7 @@
      var next = OsdModel.stateForShow(iconName, rawMessage, rawValue, rawMax, rawProgressText, rawDuration)
      // Update before opening so a fresh OSD starts at its new value; only
      // subsequent updates while it remains open animate the progress bar.
-@@ -120,9 +128,27 @@
+@@ -120,11 +128,29 @@
      }
      function close(): string { root.close(); return "ok" }
      function state(): string { return root.opened ? "open" : "closed" }
@@ -48,3 +48,5 @@
 +  }
 +
    PanelWindow {
+     id: panel
+     visible: root.opened

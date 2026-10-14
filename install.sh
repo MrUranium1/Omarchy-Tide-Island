@@ -27,7 +27,7 @@ STATE_DIR="$HOME/.local/state/omarchy/tide-island"
 BACKUPS="$STATE_DIR/backups"
 INSTALLED_FILE="$STATE_DIR/installed.json"
 HYPR="$HOME/.config/hypr"
-TSTAMP="$(date +%Y%m%d-%H%M%S)"
+TSTAMP="$(date +%Y%m%d-%H%M%S.%N)"
 
 flag_keybinding=1
 flag_config=1
@@ -62,6 +62,7 @@ done
 log() { printf 'install: %s\n' "$*"; }
 
 mkdir -p "$BIN_TARGET" "$PLUGINS_DIR" "$STATE_DIR" "$BACKUPS"
+cli_shim_hashes="$(jq -c '.cliShimHashes // {}' "$INSTALLED_FILE" 2>/dev/null || printf '{}')"
 
 # ------------------------------------------------------------- dependencies
 
@@ -98,15 +99,41 @@ fi
 
 cli_shims=()
 install_shim() {
-  local src="$1" name dest
+  local src="$1" name dest expected current source_hash tmp backup
   name="$(basename "$src")"
   dest="$BIN_TARGET/$name"
-  if [[ -e $dest && ! -L $dest ]] && ! cmp -s "$src" "$dest"; then
-    cp "$dest" "$BACKUPS/$TSTAMP.$name.shim"
-    log "backed up pre-existing $dest"
+  expected="$(jq -r --arg n "$name" '.[$n] // empty' <<<"$cli_shim_hashes")"
+  source_hash="$(sha256sum "$src" | cut -d' ' -f1)"
+  if [[ -e $dest || -L $dest ]]; then
+    if [[ -z $expected || -L $dest || ! -f $dest ]]; then
+      log "keeping existing unowned CLI command $dest."
+      return 0
+    fi
+    current="$(sha256sum "$dest" | cut -d' ' -f1)"
+    if [[ $current != "$expected" ]]; then
+      log "keeping user-modified CLI shim $dest; ownership record retained for safe removal."
+      return 0
+    fi
+    if [[ $current != "$source_hash" ]]; then
+      backup="$(mktemp "$BACKUPS/$TSTAMP.$name.XXXXXX.shim")"
+      cp -p "$dest" "$backup"
+      tmp="$(mktemp "$BIN_TARGET/.${name}.XXXXXX")"
+      install -m 0755 "$src" "$tmp"
+      mv -f "$tmp" "$dest"
+      log "updated managed CLI shim $dest (previous copy backed up)."
+    fi
+  else
+    tmp="$(mktemp "$BIN_TARGET/.${name}.XXXXXX")"
+    install -m 0755 "$src" "$tmp"
+    if ! ln "$tmp" "$dest" 2>/dev/null; then
+      rm -f "$tmp"
+      log "keeping CLI command created concurrently at $dest."
+      return 0
+    fi
+    rm -f "$tmp"
+    log "installed CLI shim $dest."
   fi
-  install -m 0755 "$src" "$dest"
-  log "installed $dest"
+  cli_shim_hashes="$(jq -c --arg n "$name" --arg h "$source_hash" '.[$n] = $h' <<<"$cli_shim_hashes")"
   cli_shims+=("$name")
 }
 install_shim "$ROOT/bin/omarchy-tide-island-toggle"
@@ -145,8 +172,21 @@ notif_clone_after="$(omarchy-plugin-list --json 2>/dev/null | jq -r '[(.[] | sel
 # ------------------------------------------------------------- keybinding
 
 key_wired=0
+key_module_created=false
+key_module_backup=""
+key_module_sha=""
+require_created_by_us=false
 key_module="$HYPR/tide-island.lua"
 hyprland_backup=""
+if [[ -f $INSTALLED_FILE ]] \
+  && [[ $(jq -r '.keybinding.module // empty' "$INSTALLED_FILE" 2>/dev/null || true) == "$key_module" ]]; then
+  [[ $(jq -r '.keybinding.wired // false' "$INSTALLED_FILE" 2>/dev/null || true) == true ]] && key_wired=1
+  key_module_created="$(jq -r '.keybinding.moduleCreatedByUs // false' "$INSTALLED_FILE" 2>/dev/null || echo false)"
+  key_module_backup="$(jq -r '.keybinding.moduleBackup // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+  key_module_sha="$(jq -r '.keybinding.moduleSha256 // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+  require_created_by_us="$(jq -r '.keybinding.requireCreatedByUs // false' "$INSTALLED_FILE" 2>/dev/null || echo false)"
+  hyprland_backup="$(jq -r '.keybinding.hyprlandBackup // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+fi
 if (( flag_keybinding )); then
   already_wired=0
   if [[ -f $HYPR/hyprland.lua ]] && grep -q 'hypr\.tide-island' "$HYPR/hyprland.lua"; then
@@ -160,19 +200,23 @@ if (( flag_keybinding )); then
 
   if (( already_wired )); then
     log "hyprland.lua already loads hypr.tide-island; keeping it."
-    [[ -f $key_module ]] || install -m 0644 "$ROOT/packaging/hyprland-tide-island.lua" "$key_module"
     key_wired=1
   elif (( existing_binding )); then
     log "found an existing bar/tide binding in bindings.lua; leaving your hypr config untouched."
   elif [[ -f $HYPR/hyprland.lua ]]; then
-    if [[ -e $key_module ]] && ! cmp -s "$ROOT/packaging/hyprland-tide-island.lua" "$key_module"; then
+    if [[ -e $key_module ]]; then
       cp "$key_module" "$BACKUPS/$TSTAMP.tide-island.lua"
+      key_module_backup="$BACKUPS/$TSTAMP.tide-island.lua"
       log "backed up existing $key_module"
+    else
+      key_module_created=true
     fi
     install -m 0644 "$ROOT/packaging/hyprland-tide-island.lua" "$key_module"
+    key_module_sha="$(sha256sum "$key_module" | cut -d' ' -f1)"
     cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland.lua"
     printf '\nrequire("default.hypr.require_optional").module("hypr.tide-island")\n' >>"$HYPR/hyprland.lua"
     hyprland_backup="$BACKUPS/$TSTAMP.hyprland.lua"
+    require_created_by_us=true
     key_wired=1
     log "wired $key_module into hyprland.lua (apply with hyprctl reload)."
   else
@@ -223,8 +267,13 @@ bash "$ROOT/scripts/tide-sync.sh" reconcile
 # userconfig next to the state so uninstall knows what it may reclaim.
 mkdir -p "$HOME/.local/lib/omarchy-tide-island"
 install -m 0755 "$ROOT/scripts/teardown.sh" "$HOME/.local/lib/omarchy-tide-island/teardown.sh"
+mkdir -p "$HOME/.local/lib/omarchy-tide-island/patches"
+install -m 0644 "$ROOT/patches/omarchy-osd-suppression.patch" \
+  "$HOME/.local/lib/omarchy-tide-island/patches/omarchy-osd-suppression.patch"
+install -m 0644 "$ROOT/patches/omarchy-notifications-suppression.patch" \
+  "$HOME/.local/lib/omarchy-tide-island/patches/omarchy-notifications-suppression.patch"
 install -m 0644 "$ROOT/default/tide-userconfig.json" "$STATE_DIR/seeded-userconfig.json"
-log "installed removal helper at \$HOME/.local/lib/omarchy-tide-island/teardown.sh"
+log "installed removal helper and recovery patches under \$HOME/.local/lib/omarchy-tide-island"
 
 # ---------------------------------------------------------- installed.json
 
@@ -247,30 +296,52 @@ if [[ -f $INSTALLED_FILE ]]; then
   [[ -n $prev_notif_before ]] && notif_clone_before="$prev_notif_before"
 fi
 
+osd_clone_baseline="$(jq -r '.suppression.osd.baselineFingerprint // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+notif_clone_baseline="$(jq -r '.suppression.notifications.baselineFingerprint // empty' "$INSTALLED_FILE" 2>/dev/null || true)"
+[[ -n $osd_clone_baseline ]] || osd_clone_baseline="$(cat "$STATE_DIR/clone-baselines/$osd_clone_after" 2>/dev/null || true)"
+[[ -n $notif_clone_baseline ]] || notif_clone_baseline="$(cat "$STATE_DIR/clone-baselines/$notif_clone_after" 2>/dev/null || true)"
+if [[ -n $key_module_sha ]]; then
+  :
+elif [[ $key_module_created == true && -f $key_module ]]; then
+  key_module_sha="$(sha256sum "$key_module" | cut -d' ' -f1)"
+fi
+
 jq -n \
   --arg installer "$ROOT" \
   --arg installedAt "$TSTAMP" \
   --argjson shims "$(printf '%s\n' "${cli_shims[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
+  --argjson shimHashes "$cli_shim_hashes" \
   --argjson configSeeded "$( (( config_seeded )) && echo true || echo false )" \
   --argjson keyWired "$( (( key_wired )) && echo true || echo false )" \
   --arg keyModule "$key_module" \
   --arg hyprlandBackup "$hyprland_backup" \
+  --argjson keyModuleCreated "$key_module_created" \
+  --arg keyModuleBackup "$key_module_backup" \
+  --arg keyModuleSha "$key_module_sha" \
+  --argjson requireCreatedByUs "$require_created_by_us" \
   --arg osdCloneBefore "$osd_clone_before" \
   --arg osdCloneAfter "$osd_clone_after" \
   --argjson osdCloneCreated "$osd_clone_created" \
+  --arg osdCloneBaseline "$osd_clone_baseline" \
   --arg notifCloneBefore "$notif_clone_before" \
   --arg notifCloneAfter "$notif_clone_after" \
   --argjson notifCloneCreated "$notif_clone_created" \
+  --arg notifCloneBaseline "$notif_clone_baseline" \
   --arg tideUserConfigPath "$tide_userconfig" \
   --argjson tideUserConfigSeeded "$( (( seed_tide_userconfig )) && echo true || echo false )" \
   --argjson shortcutBinding "$shortcut_state" \
   '{ installer: $installer, installedAt: $installedAt,
-     cliShims: $shims, configSeeded: $configSeeded,
-     keybinding: { wired: $keyWired, module: $keyModule, hyprlandBackup: $hyprlandBackup },
+     cliShims: $shims, cliShimHashes: $shimHashes, configSeeded: $configSeeded,
+     keybinding: { wired: $keyWired, module: $keyModule, hyprlandBackup: $hyprlandBackup,
+                   moduleCreatedByUs: $keyModuleCreated, moduleBackup: $keyModuleBackup,
+                   moduleSha256: $keyModuleSha,
+                   requireCreatedByUs: $requireCreatedByUs },
      shortcutBinding: $shortcutBinding,
      suppression: {
-       osd: { before: $osdCloneBefore, after: $osdCloneAfter, createdByUs: $osdCloneCreated },
-       notifications: { before: $notifCloneBefore, after: $notifCloneAfter, createdByUs: $notifCloneCreated }
+       osd: { before: $osdCloneBefore, after: $osdCloneAfter, createdByUs: $osdCloneCreated,
+              baselineFingerprint: $osdCloneBaseline },
+       notifications: { before: $notifCloneBefore, after: $notifCloneAfter, createdByUs: $notifCloneCreated,
+                        baselineFingerprint: $notifCloneBaseline }
      },
      tideUserConfig: { path: $tideUserConfigPath, seeded: $tideUserConfigSeeded } }' >"$INSTALLED_FILE" 2>/dev/null || {
       log "could not write $INSTALLED_FILE (missing jq?); continuing." >&2

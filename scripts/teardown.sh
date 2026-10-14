@@ -12,14 +12,14 @@
 # our uninstall.sh.
 #
 # Flags:
-#   --remove-clones    Remove the OSD/notification clones we created ourselves
-#                      (they are otherwise de-patched but kept).
+#   --remove-clones    Remove only OSD/notification clones whose complete tree
+#                      still matches the creation snapshot.
 #   --remove-runtime   Remove the bundled Tide Island from ~/.local.
-#   --purge-config     Delete ~/.config/omarchy/tide-island.json.
+#   --purge-config     Prompt for PURGE before deleting plugin config.
 #   --if-plugin-gone   No-op unless the plugin directory is already missing
 #                      (used by the Component.onDestruction guard).
-#   --final            Remove the state directory and this helper when done
-#                      (used for a fully automatic removal).
+#   --final            Remove state/helper only if no recovery backup or
+#                      suppression marker remains.
 #
 # State lives in ~/.local/state/omarchy/tide-island/installed.json (written by
 # install.sh); backups of every file we touched are kept in .../backups/.
@@ -35,14 +35,22 @@ CONFIG_TARGET="$HOME/.config/omarchy/tide-island.json"
 STATE_DIR="$HOME/.local/state/omarchy/tide-island"
 BACKUPS="$STATE_DIR/backups"
 STATE_MARKERS="$STATE_DIR/patch-state"
+CLONE_BASELINES="$STATE_DIR/clone-baselines"
 INSTALLED_FILE="$STATE_DIR/installed.json"
 SEED_FILE="$STATE_DIR/seeded-userconfig.json"
 LIB_DIR="$HOME/.local/lib/omarchy-tide-island"
+DESKTOP_STATE="$STATE_DIR/desktop-entries.json"
+PATH_STATE="$STATE_DIR/path-links.json"
+APPS_DIR="$HOME/.local/share/applications"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PATCHES_DIR="$SCRIPT_DIR/patches"
+[[ -d "$SCRIPT_DIR/../patches" ]] && PATCHES_DIR="$SCRIPT_DIR/../patches"
+[[ -d $PATCHES_DIR ]] || PATCHES_DIR="$LIB_DIR/patches"
 HYPR="$HOME/.config/hypr"
 UPSTREAM="/usr/share/omarchy/shell/plugins"
 TIDE_USERCONFIG="$HOME/.config/tide-island/userconfig.json"
 SYSTEMCTL="${TIDE_SYNC_SYSTEMCTL:-systemctl}"
-TSTAMP="$(date +%Y%m%d-%H%M%S)"
+TSTAMP="$(date +%Y%m%d-%H%M%S.%N)"
 
 opt_remove_clones=0
 opt_remove_runtime=0
@@ -55,9 +63,9 @@ usage() {
 Usage: teardown.sh [--remove-clones] [--remove-runtime] [--purge-config]
                    [--if-plugin-gone] [--final] [--help]
 
-  --remove-clones    Remove the OSD/notification clones we created.
+  --remove-clones    Remove only unchanged clones with a verified fingerprint.
   --remove-runtime   Remove the bundled Tide Island from ~/.local.
-  --purge-config     Delete ~/.config/omarchy/tide-island.json.
+  --purge-config     Prompt before deleting ~/.config/omarchy/tide-island.json.
   --if-plugin-gone   Only act when the plugin directory is missing.
   --final            Remove the state directory + this helper when done.
   --help             Show this help.
@@ -79,6 +87,15 @@ done
 
 log() { printf 'teardown: %s\n' "$*"; }
 
+if (( opt_purge_config )); then
+  printf 'This permanently deletes %s (a recovery copy will be kept). Type PURGE to continue: ' "$CONFIG_TARGET" >&2
+  purge_answer=""
+  if ! IFS= read -r purge_answer || [[ $purge_answer != PURGE ]]; then
+    log "configuration purge cancelled; no teardown actions were performed." >&2
+    exit 1
+  fi
+fi
+
 # The automatic path calls us while the shell is being torn down; bail unless the
 # plugin really is gone, so a hot-reload or disable is never mistaken for a
 # removal.
@@ -97,8 +114,29 @@ resync_shell() {
   omarchy-shell -q notifications syncSuppression 2>/dev/null || true
 }
 
+clone_fingerprint() {
+  local dir="$1"
+  [[ -d $dir ]] || return 1
+  (
+    cd "$dir"
+    find . -mindepth 1 -printf '%y %m %P %l\n' | LC_ALL=C sort
+    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+  ) | sha256sum | cut -d' ' -f1
+}
+
 remove_clone() {
-  local id="$1"
+  local id="$1" expected="${2:-}" actual
+  if [[ -z $expected ]]; then
+    log "preserving clone '$id': no creation fingerprint is available; review it manually."
+    return 1
+  fi
+  actual="$(clone_fingerprint "$PLUGINS_DIR/$id" 2>/dev/null || true)"
+  if [[ $actual != "$expected" ]]; then
+    log "preserving modified clone '$id'; current files differ from the installation snapshot."
+    log "Its suppression will be reverted only if the patch can be removed without overwriting edits."
+    log "Review $PLUGINS_DIR/$id and backups in $BACKUPS before removing it."
+    return 1
+  fi
   if command -v omarchy >/dev/null 2>&1 && omarchy plugin remove "$id" --yes >/dev/null 2>&1; then
     log "removed clone '$id'."
   fi
@@ -107,6 +145,31 @@ remove_clone() {
     log "removed directory $PLUGINS_DIR/$id"
   fi
   rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+  rm -f "$CLONE_BASELINES/$id" "$STATE_DIR/created-clones/$id" 2>/dev/null || true
+  return 0
+}
+
+restore_managed_patch() {
+  local file="$1" backup="$2" patch="$3" restore_dir restore_entry merge_status
+  if [[ -z $backup || ! -f $backup || ! -f $patch ]] || ! command -v diff3 >/dev/null 2>&1; then
+    return 1
+  fi
+  restore_dir="$(mktemp -d "${TMPDIR:-/tmp}/tide-island-restore.XXXXXX")"
+  restore_entry="$restore_dir/patched/$(basename "$file")"
+  mkdir -p "$(dirname "$restore_entry")"
+  cp -p "$backup" "$restore_entry"
+  if patch -p1 --batch --no-backup -d "$(dirname "$restore_entry")" <"$patch" >/dev/null 2>&1; then
+    merge_status=0
+    diff3 -m "$file" "$restore_entry" "$backup" >"$restore_dir/merged" || merge_status=$?
+    if (( merge_status == 0 )); then
+      chmod --reference="$file" "$restore_dir/merged"
+      mv -f "$restore_dir/merged" "$file"
+      rm -rf -- "$restore_dir"
+      return 0
+    fi
+  fi
+  rm -rf -- "$restore_dir"
+  return 1
 }
 
 # ------------------------------------------------------------- suppression
@@ -117,7 +180,7 @@ remove_clone() {
 # still live in the clones. Only clones whose entry point actually carries our
 # marker are touched, so an unrelated custom clone is never harmed.
 scan_and_clean() {
-  local role="$1" skip="$2" m id entry file base backup upstream marker
+  local role="$1" skip="$2" m id entry file base backup upstream marker patch
   for m in "$PLUGINS_DIR"/*/manifest.json; do
     [[ -f $m ]] || continue
     id="$(basename "$(dirname "$m")")"
@@ -131,30 +194,26 @@ scan_and_clean() {
     [[ $role == notifications ]] && marker="popupsSuppressed"
     grep -q "$marker" "$file" || continue
 
-    if (( opt_remove_clones )); then
-      remove_clone "$id"
-      continue
-    fi
     base="$(basename "$file")"
     backup="$(ls -1t "$BACKUPS"/*."$id".$base 2>/dev/null | head -1 || true)"
     upstream="$UPSTREAM/$role/$base"
-    if [[ -n $backup ]]; then
-      cp "$backup" "$file"
-      log "de-suppressed '$id' (restored $base from backup)."
-    elif [[ -f $upstream ]]; then
-      cp "$upstream" "$file"
-      log "de-suppressed '$id' (restored $base from the built-in)."
+    patch="$PATCHES_DIR/omarchy-$role-suppression.patch"
+    if restore_managed_patch "$file" "$backup" "$patch"; then
+      rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+      log "de-suppressed '$id' by reversing only the managed patch; other files were preserved."
+    elif [[ -f $upstream && -f $file ]] && cmp -s "$file" "$upstream"; then
+      rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+      log "'$id' is already pristine."
     else
-      log "cannot restore '$id' automatically; re-clone it if popups misbehave." >&2
-      continue
+      log "conflict restoring '$id': preserved $file and its backup ${backup:-<none>}." >&2
+      log "Review and merge manually; no clone files were overwritten." >&2
     fi
-    rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
   done
 }
 
 undo_suppression() {
   mkdir -p "$BACKUPS"
-  local role id created marker entry file base backup upstream dir handled
+  local role id created marker entry file base backup upstream dir handled baseline patch restored
   for role in osd notifications; do
     handled=""
     id="$(jq -r --arg r "$role" '.suppression[$r].after // empty' <<<"$state" 2>/dev/null || true)"
@@ -165,39 +224,47 @@ undo_suppression() {
       if [[ ! -d $dir ]]; then
         rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
       else
-        if [[ $created == "true" && $opt_remove_clones == 1 ]]; then
-          remove_clone "$id"
-        else
-          marker="$(cat "$STATE_MARKERS/$id" 2>/dev/null || true)"
-          if [[ $marker == preexisting ]]; then
-            log "clone '$id' was already suppressed before the plugin; leaving it untouched."
-          elif [[ -n $marker || $created == "true" ]]; then
-            entry="$(jq -r '.entryPoints.panel // .entryPoints.service // .entryPoints.barWidget // empty' \
-              "$dir/manifest.json" 2>/dev/null || true)"
-            if [[ -z $entry ]]; then
-              log "cannot determine the entry point of '$id'; leaving it."
+        baseline="$(jq -r --arg r "$role" '.suppression[$r].baselineFingerprint // empty' <<<"$state" 2>/dev/null || true)"
+        if [[ -z $baseline ]]; then
+          baseline="$(cat "$CLONE_BASELINES/$id" 2>/dev/null || true)"
+        fi
+        marker="$(cat "$STATE_MARKERS/$id" 2>/dev/null || true)"
+        if [[ $marker == preexisting ]]; then
+          log "clone '$id' was already suppressed before the plugin; leaving it untouched."
+        elif [[ $marker == applied ]]; then
+          entry="$(jq -r '.entryPoints.panel // .entryPoints.service // .entryPoints.barWidget // empty' \
+            "$dir/manifest.json" 2>/dev/null || true)"
+          if [[ -z $entry ]]; then
+            log "cannot determine the entry point of '$id'; preserving clone and backups."
+          else
+            file="$dir/$entry"
+            base="$(basename "$file")"
+            backup="$(ls -1t "$BACKUPS"/*."$id".$base 2>/dev/null | head -1 || true)"
+            upstream="$UPSTREAM/$role/$base"
+            patch="$PATCHES_DIR/omarchy-$role-suppression.patch"
+            restored=0
+            if [[ -n $backup && -f $file ]] && cmp -s "$backup" "$file"; then
+              restored=1
+              log "'$id' is already pristine; kept its recovery backup."
+            elif [[ -f $file ]] && restore_managed_patch "$file" "$backup" "$patch"; then
+              restored=1
+              log "de-suppressed '$id' by reversing only the managed patch; other edits were preserved."
+            elif [[ -f $upstream && -f $file ]] && cmp -s "$file" "$upstream"; then
+              restored=1
+              log "'$id' is already pristine."
             else
-              file="$dir/$entry"
-              base="$(basename "$file")"
-              backup="$(ls -1t "$BACKUPS"/*."$id".$base 2>/dev/null | head -1 || true)"
-              upstream="$UPSTREAM/$role/$base"
-              if [[ -n $backup ]]; then
-                cp "$backup" "$file"
-                rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
-                log "de-suppressed '$id' (restored $base from backup)."
-              elif [[ -f $upstream ]]; then
-                cp "$upstream" "$file"
-                rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
-                log "de-suppressed '$id' (restored $base from the built-in)."
-              elif (( opt_remove_clones )); then
-                remove_clone "$id"
-              else
-                log "could not restore '$id'; re-clone it if popups misbehave." >&2
+              log "conflict restoring '$id': preserved $file and its backup ${backup:-<none>}." >&2
+              log "Review and merge manually; no clone files were overwritten." >&2
+            fi
+            if (( restored )); then
+              rm -f "$STATE_MARKERS/$id" 2>/dev/null || true
+              if [[ $created == "true" && $opt_remove_clones == 1 ]]; then
+                remove_clone "$id" "$baseline" || true
               fi
             fi
-          else
-            log "no record of this plugin patching '$id'; leaving it untouched."
           fi
+        else
+          log "no record of this plugin applying suppression to '$id'; preserving it and its backups."
         fi
       fi
     fi
@@ -207,19 +274,51 @@ undo_suppression() {
 
 undo_suppression
 
+# ---------------------------------------------------------- desktop entries
+
+restore_desktop_entries() {
+  [[ -f $DESKTOP_STATE ]] || return 0
+  local entries name expected target current tmp
+  entries="$(cat "$DESKTOP_STATE")"
+  for name in tide-island.desktop tide-island-config.desktop; do
+    expected="$(jq -r --arg n "$name" '.[$n] // empty' <<<"$entries")"
+    [[ -n $expected ]] || continue
+    target="$APPS_DIR/$name"
+    if [[ ! -e $target && ! -L $target ]]; then
+      entries="$(jq -c --arg n "$name" 'del(.[$n])' <<<"$entries")"
+      continue
+    fi
+    if [[ -f $target && ! -L $target ]]; then
+      current="$(sha256sum "$target" | cut -d' ' -f1)"
+      if [[ $current == "$expected" ]]; then
+        rm -f "$target"
+        entries="$(jq -c --arg n "$name" 'del(.[$n])' <<<"$entries")"
+        log "removed unchanged plugin-managed desktop entry $target."
+        continue
+      fi
+    fi
+    log "preserving user-modified desktop entry $target; recovery metadata remains in $DESKTOP_STATE." >&2
+  done
+  tmp="$(mktemp "$STATE_DIR/.desktop-entries.XXXXXX")"
+  printf '%s\n' "$entries" >"$tmp"
+  mv -f "$tmp" "$DESKTOP_STATE"
+}
+
+restore_desktop_entries
+
 # --------------------------------------------------------------- CLI shims
 
-shim_names="$(jq -r '.cliShims[]? // empty' <<<"$state" 2>/dev/null || true)"
-if [[ -z $shim_names ]]; then
-  shim_names="$(printf '%s\n' omarchy-tide-island-toggle omarchy-tide-island-status)"
-fi
+shim_names="$(jq -r '.cliShimHashes // {} | keys[]' <<<"$state" 2>/dev/null || true)"
 while IFS= read -r name; do
   [[ -z $name ]] && continue
   dest="$BIN_TARGET/$name"
-  if [[ -f $dest || -L $dest ]]; then
-    cp "$dest" "$BACKUPS/$TSTAMP.$name" 2>/dev/null || true
+  expected="$(jq -r --arg n "$name" '.cliShimHashes[$n] // empty' <<<"$state" 2>/dev/null || true)"
+  if [[ -f $dest && ! -L $dest && -n $expected ]] \
+    && [[ $(sha256sum "$dest" | cut -d' ' -f1) == "$expected" ]]; then
     rm -f "$dest"
-    log "removed $dest (backup kept)."
+    log "removed unchanged plugin-managed CLI shim $dest."
+  elif [[ -e $dest || -L $dest ]]; then
+    log "preserved unverified or user-modified CLI command $dest." >&2
   fi
 done <<<"$shim_names"
 
@@ -228,21 +327,36 @@ done <<<"$shim_names"
 if [[ $(jq -r '.keybinding.wired // false' <<<"$state" 2>/dev/null || echo false) == "true" ]]; then
   module="$(jq -r '.keybinding.module // empty' <<<"$state" 2>/dev/null || true)"
   if [[ -n $module && -f $module ]]; then
-    mkdir -p "$BACKUPS"
-    cp "$module" "$BACKUPS/$TSTAMP.$(basename "$module")"
-    rm -f "$module"
-    log "removed $module (backup kept)."
+    module_sha="$(jq -r '.keybinding.moduleSha256 // empty' <<<"$state" 2>/dev/null || true)"
+    module_created="$(jq -r '.keybinding.moduleCreatedByUs // false' <<<"$state" 2>/dev/null || true)"
+    module_backup="$(jq -r '.keybinding.moduleBackup // empty' <<<"$state" 2>/dev/null || true)"
+    current_sha="$(sha256sum "$module" | cut -d' ' -f1)"
+    if [[ -n $module_sha && $current_sha == "$module_sha" ]]; then
+      if [[ $module_created == true ]]; then
+        rm -f "$module"
+        log "removed unchanged plugin-managed module $module."
+      elif [[ -n $module_backup && -f $module_backup ]]; then
+        cp -p "$module_backup" "$module"
+        log "restored the pre-existing module $module from its retained backup."
+      else
+        log "preserved $module: no creation record or recovery backup is available."
+      fi
+    else
+      log "preserved user-modified Hyprland module $module and its backup." >&2
+    fi
   fi
-  # Remove ONLY the require line we appended (surgically) instead of restoring the
-  # whole file from backup: the island shortcut block may live in the same file
-  # and may have been edited by the user or the settings app, so a whole-file
-  # restore could silently discard it.
-  if [[ -f $HYPR/hyprland.lua ]] && grep -q 'hypr\.tide-island' "$HYPR/hyprland.lua"; then
+  require_created="$(jq -r '.keybinding.requireCreatedByUs // false' <<<"$state" 2>/dev/null || true)"
+  require_line='require("default.hypr.require_optional").module("hypr.tide-island")'
+  if [[ $require_created == true && -f $HYPR/hyprland.lua ]] \
+    && grep -Fxq "$require_line" "$HYPR/hyprland.lua"; then
     mkdir -p "$BACKUPS"
-    cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland.lua"
-    grep -v 'hypr\.tide-island' "$HYPR/hyprland.lua" >"$HYPR/hyprland.lua.tmp"
+    cp "$HYPR/hyprland.lua" "$BACKUPS/$TSTAMP.hyprland-require.lua"
+    awk -v line="$require_line" '
+      !removed && $0 == line { removed = 1; next }
+      { print }
+    ' "$HYPR/hyprland.lua" >"$HYPR/hyprland.lua.tmp"
     mv "$HYPR/hyprland.lua.tmp" "$HYPR/hyprland.lua"
-    log "removed the tide-island require line from hyprland.lua (rest untouched)."
+    log "removed only the exact plugin-managed require line from hyprland.lua."
   fi
 else
   log "no keybinding module was wired; leaving hypr config untouched."
@@ -275,7 +389,7 @@ if [[ $(jq -r '.shortcutBinding.createdByUs // false' <<<"$state" 2>/dev/null ||
     cur_sha="$(printf '%s\n' "$cur_block" | sha256sum | awk '{print $1}')"
     if [[ -n $sb_sha && $cur_sha == "$sb_sha" ]]; then
       mkdir -p "$BACKUPS"
-      cp "$sb_config" "$BACKUPS/$TSTAMP.hyprland.lua"
+      cp "$sb_config" "$BACKUPS/$TSTAMP.hyprland-shortcuts.lua"
       awk -v b="$SHORTCUT_BEGIN" -v e="$SHORTCUT_END" '
         $0 == b { skip = 1; next }
         skip && $0 == e { skip = 0; next }
@@ -295,7 +409,8 @@ fi
 
 if (( opt_purge_config )) && [[ -f $CONFIG_TARGET ]]; then
   mkdir -p "$BACKUPS"
-  cp "$CONFIG_TARGET" "$BACKUPS/$TSTAMP.tide-island.json"
+  config_backup="$(mktemp "$BACKUPS/$TSTAMP.tide-island.XXXXXX.json")"
+  cp -p "$CONFIG_TARGET" "$config_backup"
   rm -f "$CONFIG_TARGET"
   log "removed $CONFIG_TARGET (backup kept)."
 else
@@ -306,25 +421,72 @@ fi
 
 if (( opt_remove_runtime )); then
   PREFIX="${TIDE_ISLAND_PREFIX:-$HOME/.local/share/omarchy-tide-island}"
+  unit_conflict=0
   "$SYSTEMCTL" --user stop tide-island.service 2>/dev/null || true
   unit="$HOME/.config/systemd/user/tide-island.service"
   if [[ -f $unit ]] && grep -qF '# managed by mehir.tide-island' "$unit"; then
-    rm -f "$unit"
-    "$SYSTEMCTL" --user daemon-reload 2>/dev/null || true
-    log "removed $unit"
+    unit_sha="$(cat "$PREFIX/.unit-sha256" 2>/dev/null || true)"
+    if [[ -n $unit_sha && $(sha256sum "$unit" | cut -d' ' -f1) == "$unit_sha" ]]; then
+      rm -f "$unit"
+      "$SYSTEMCTL" --user daemon-reload 2>/dev/null || true
+      log "removed unchanged plugin-managed unit $unit"
+    else
+      unit_conflict=1
+      log "preserved user-modified or unverified unit $unit; inspect it before removing the runtime." >&2
+    fi
   fi
+  path_state="$(cat "$PATH_STATE" 2>/dev/null || printf '{}')"
   for name in tide-island tide-island-config-app; do
     link="$HOME/.local/bin/$name"
-    if [[ -L $link && "$(readlink "$link")" == "$PREFIX/bin/$name" ]]; then
+    expected="$(jq -r --arg n "$name" '.[$n] // empty' <<<"$path_state")"
+    if [[ ! -e $link && ! -L $link ]]; then
+      path_state="$(jq -c --arg n "$name" 'del(.[$n])' <<<"$path_state")"
+    elif [[ -L $link && -n $expected && "$(readlink "$link")" == "$expected" ]]; then
       rm -f "$link"
       log "removed $link"
+      path_state="$(jq -c --arg n "$name" 'del(.[$n])' <<<"$path_state")"
+    else
+      log "preserved unowned or user-modified PATH entry $link." >&2
     fi
   done
-  rm -f "$HOME/.local/share/applications/tide-island.desktop" \
-    "$HOME/.local/share/applications/tide-island-config.desktop"
+  if [[ $(jq 'length' <<<"$path_state") -eq 0 ]]; then
+    rm -f "$PATH_STATE"
+  else
+    path_tmp="$(mktemp "$STATE_DIR/.path-links.XXXXXX")"
+    printf '%s\n' "$path_state" >"$path_tmp"
+    mv -f "$path_tmp" "$PATH_STATE"
+  fi
   if [[ -f "$PREFIX/.version" ]]; then
-    rm -rf "${PREFIX:?}"
-    log "removed bundled runtime $PREFIX"
+    expected_content="$(cat "$PREFIX/.content-sha256" 2>/dev/null || true)"
+    actual_content="$(
+      cd "$PREFIX"
+      find bin lib share -type f -print0 2>/dev/null \
+        | sort -z | xargs -0 -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+    )"
+    actual_symlinks="$(
+      cd "$PREFIX"
+      find bin lib share -type l -printf '%p %l\n' 2>/dev/null | LC_ALL=C sort \
+        | sha256sum | cut -d' ' -f1
+    )"
+    expected_symlinks="$(cat "$PREFIX/.symlink-sha256" 2>/dev/null || true)"
+    if [[ -z $expected_symlinks ]]; then
+      if find "$PREFIX/bin" "$PREFIX/lib" "$PREFIX/share" -type l -print -quit 2>/dev/null | grep -q .; then
+        expected_symlinks="unverified"
+      else
+        expected_symlinks="$actual_symlinks"
+      fi
+    fi
+    extra_prefix_files="$(find "$PREFIX" -mindepth 1 -maxdepth 1 \
+      ! -name bin ! -name lib ! -name share ! -name .version ! -name .content-sha256 \
+      ! -name .symlink-sha256 ! -name .unit-sha256 -print -quit)"
+    if [[ $unit_conflict == 0 && -n $expected_content \
+      && $actual_content == "$expected_content" && $actual_symlinks == "$expected_symlinks" \
+      && -z $extra_prefix_files ]]; then
+      rm -rf "${PREFIX:?}"
+      log "removed unchanged bundled runtime $PREFIX"
+    else
+      log "preserved modified or unverified runtime prefix $PREFIX; review before manual removal." >&2
+    fi
   fi
 else
   log "kept the bundled runtime."
@@ -332,14 +494,7 @@ fi
 
 # ------------------------------------------------------------- tide config
 
-# Remove a userconfig.json we seeded, but only while it still matches the seed
-# untouched (a customized config is the user's own and stays).
-if [[ -f $TIDE_USERCONFIG && -f $SEED_FILE ]] && cmp -s "$TIDE_USERCONFIG" "$SEED_FILE"; then
-  rm -f "$TIDE_USERCONFIG"
-  log "removed seeded $TIDE_USERCONFIG (still the untouched plugin default)."
-else
-  log "left $TIDE_USERCONFIG in place (customized, or not seeded by this plugin)."
-fi
+log "preserved Tide Island user configuration at $TIDE_USERCONFIG."
 
 resync_shell
 
@@ -357,11 +512,17 @@ fi
 # ------------------------------------------------------------------- final
 
 if (( opt_final )); then
-  log "final: removing plugin state."
-  rm -rf "${STATE_DIR:?}"
-  # Delete the helper after we are done reading it; unlinking a running shell
-  # script is safe on Linux (bash holds the open fd).
-  rm -rf "${LIB_DIR:?}"
+  pending_desktop="$(jq 'length' "$DESKTOP_STATE" 2>/dev/null || echo 0)"
+  pending_path="$(jq 'length' "$PATH_STATE" 2>/dev/null || echo 0)"
+  if { [[ -d $BACKUPS ]] && find "$BACKUPS" -type f -print -quit | grep -q .; } \
+    || { [[ -d $STATE_MARKERS ]] && find "$STATE_MARKERS" -type f -print -quit | grep -q .; } \
+    || [[ $pending_desktop -gt 0 || $pending_path -gt 0 ]]; then
+    log "retaining state, helper, and backups needed for recovery in $STATE_DIR."
+  else
+    log "no recovery backups remain; removing empty plugin state and helper."
+    rm -rf "${STATE_DIR:?}"
+    rm -rf "${LIB_DIR:?}"
+  fi
 fi
 
 log "done."

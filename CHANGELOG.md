@@ -2,6 +2,27 @@
 
 All notable changes to the mehir.tide-island plugin.
 
+## [Unreleased]
+
+- Added Omarchy wallpaper and theme discovery/switching to the bundled Tide
+  Island picker; themes now populate the preview carousel immediately after
+  discovery instead of waiting for a search edit.
+- Made desktop entries, CLI shims, service units, and the bundled runtime
+  ownership-aware: preserve pre-existing files and user modifications, and
+  refuse unsafe replacement or removal when fingerprints do not match.
+- Made clone teardown reverse only the suppression patch hunks. Plugin-created
+  clones are removed only when their complete tree matches the recorded
+  creation snapshot; modified or unverified clones and their recovery backups
+  are retained with actionable conflict logs.
+- Changed automatic plugin removal to preserve both user configuration files
+  and recovery state. Explicit config purging now requires typing `PURGE`.
+- Restricted Hyprland cleanup to the exact require line and shortcut block
+  recorded as plugin-created.
+- Removed the obsolete malformed duplicate theme-picker patch; retained the
+  main theme integration patch and added a zero-fuzz round-trip test.
+- Corrected shortcut parity expectations, GPL license text, Tide Island source
+  commit provenance, and the repository's mixed-license descriptions.
+
 ## [0.1.0] - 2026-10-13
 
 Initial release.
@@ -32,7 +53,7 @@ Initial release.
 - Ship a default island look: on a machine with no Tide config yet, the install
   seeds `~/.config/tide-island/userconfig.json` once (Reserved Top Space 9, Top
   Margin 1, Background Transparency 100, island 36x140); existing configs are
-  never overwritten and an untouched seed is removed on uninstall.
+  never overwritten and the Tide userconfig is preserved on uninstall.
 - Seed the settings app's default shortcuts in that same one-time config: the
   seed now carries the island keybindings (`SUPER + ALT +` H/J/T/M/C/P/N/A/O/V/D
   for the island views, plus `SUPER + ALT + I` to toggle the island) with the

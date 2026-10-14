@@ -42,7 +42,8 @@ any polling daemon.
 
 ## Installation
 
-Prerequisites: `quickshell`, `jq`, `patch` (all present on a stock Omarchy).
+Prerequisites: `quickshell`, `jq`, `patch`, `diff3` (all present on a stock
+Omarchy).
 Tide Island itself is **bundled** with the plugin, so there is no separate
 package/AUR step. `scripts/install-dependencies.sh` reports anything missing.
 
@@ -120,11 +121,11 @@ setup — that is Omarchy confirming it created a clone for customization. It is
 expected, not an error, and Omarchy's behaviour is left unchanged; install
 follows it with an explainer notification.
 
-Everything is recorded in `~/.local/state/omarchy/tide-island/installed.json`.
-Repeat `install.sh` to repair; `uninstall.sh` reverses it (nothing user-created
-is ever deleted, just backed up, and a stand-down you had before the plugin is
-left in place). Pass `--remove-runtime` to also remove the bundled Tide Island
-from `~/.local`.
+Everything is recorded under `~/.local/state/omarchy/tide-island/`. Repeat
+`install.sh` to repair. Existing desktop entries are never overwritten; entries
+created by the plugin are removed only while they still match the recorded
+plugin copy. An edited managed entry is kept with ownership metadata for manual
+recovery.
 
 ## Removal
 
@@ -132,21 +133,35 @@ Two ways, both undo the OSD/notification stand-down (so the volume/display OSD
 and notification popups go back to normal instead of disappearing into the
 island):
 
-1. **`omarchy plugin remove mehir.tide-island`** — enough on its own. The
-   plugin notices its directory is gone and runs the self-contained teardown
-   installed at `~/.local/lib/omarchy-tide-island/teardown.sh`, which removes
-   the suppression clones it created, the CLI shims, the keybinding, the
-   bundled runtime and the recorded state. (The island shortcut block it wrote
-   to `hyprland.lua` is removed too, but only while it is still untouched.)
-   (`scripts/teardown.sh` is installed *outside* the plugin directory precisely
-   so it survives the plugin being deleted.)
+1. **`omarchy plugin remove mehir.tide-island`** — the plugin notices its
+   directory is gone and runs the self-contained teardown at
+   `~/.local/lib/omarchy-tide-island/teardown.sh`. It restores the OSD and
+   notification behavior by reversing only its patch hunks, removes unchanged
+   plugin-owned CLI shims, PATH links, desktop entries, and runtime files only
+   while they still match the recorded installation, and removes the exact
+   Hyprland require line and shortcut block it recorded. It preserves user
+   configuration, edits to clones, modified desktop entries, and recovery
+   backups. Clones are kept on automatic removal.
 2. **`bash uninstall.sh --remove-plugin --remove-runtime`** — from a checkout;
-   logs what it backs up before removing. Add `--purge-config` to also delete
-   the plugin config. A shutdown stand-down you already had *before* this
-   plugin is detected and left untouched in both cases.
+   it requests removal of clones created by the plugin, but deletes a clone
+   only if its files still match the installation snapshot. Modified or
+   unverified clones remain in place; their suppression is reversed only when
+   the patch can be cleanly removed without overwriting edits. Conflicts are
+   logged with the affected path and retained backup location for manual merge.
+   A shutdown stand-down you already had *before* this plugin is left untouched.
 
-A `~/.config/tide-island/userconfig.json` you customized is always kept; only
-a config the plugin seeded (and that you never touched) is reclaimed.
+The plugin's `~/.config/omarchy/tide-island.json`, Tide's
+`~/.config/tide-island/userconfig.json`, and teardown backups are preserved by
+default. To delete only the plugin config, run
+`bash uninstall.sh --purge-config` and type `PURGE` at the confirmation prompt.
+The Tide Island userconfig is never purged by teardown. Backups and the
+out-of-tree teardown helper remain when needed for recovery; `--final` will
+not delete state containing backups or pending suppression markers.
+
+Desktop entries and the bundled runtime are managed by content fingerprints.
+If a managed file or runtime tree has been edited, teardown preserves it and
+logs the path rather than removing user changes. An unverified legacy runtime
+is preserved as well.
 
 ## Configuration
 
@@ -282,9 +297,12 @@ machine without disturbing the session.
 
 ## Licensing
 
-See NOTICE.md and LICENSE. The plugin's own code is MIT. The suppression
-patches are modifications of Omarchy's MIT plugins. The Tide lyrics patch is a
-derivative of Tide Island's GPL-3.0-only code (`LICENSES/GPL-3.0-only.txt`).
-The bundled Tide Island runtime under `vendor/tide-island/` is Tide Island
-itself and stays **GPL-3.0-only** (see `vendor/tide-island/PROVENANCE.md`).
-Quickshell (LGPL-3.0-only) is a runtime dependency, used as a separate program.
+The plugin orchestration code and original Omarchy bridge are MIT-licensed
+(`LICENSE`). Omarchy suppression patches modify Omarchy's MIT-licensed plugins.
+The bundled Tide Island runtime and Tide-derived theme-picker QML, along with
+the optional lyrics patch, are GPL-3.0-only; the verbatim license is in
+`LICENSES/GPL-3.0-only.txt`. Quickshell is a separate LGPL-3.0-only runtime
+dependency. See `NOTICE.md` and `vendor/tide-island/PROVENANCE.md` for exact
+scope and immutable source provenance. The manifest's `license` string
+summarizes the plugin and bundled-runtime licenses; it does not claim that all
+files are under one license.

@@ -27,6 +27,8 @@ PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 STATE_DIR="$HOME/.local/state/omarchy/tide-island"
 BACKUPS_DIR="$STATE_DIR/backups"
 STATE_MARKERS="$STATE_DIR/patch-state"
+CREATED_CLONES="$STATE_DIR/created-clones"
+CLONE_BASELINES="$STATE_DIR/clone-baselines"
 OMARCHY_SHELL_DIR="/usr/share/omarchy/shell/plugins"
 
 mode="apply"
@@ -106,8 +108,24 @@ ensure_clone() {
     log "clone of $source was not discovered; is the omarchy shell running?" >&2
     return 1
   fi
+  mkdir -p "$CREATED_CLONES"
+  : >"$CREATED_CLONES/$id"
+  mkdir -p "$CLONE_BASELINES"
+  if [[ ! -f "$CLONE_BASELINES/$id" ]]; then
+    clone_fingerprint "$PLUGINS_DIR/$id" >"$CLONE_BASELINES/$id.tmp"
+    mv "$CLONE_BASELINES/$id.tmp" "$CLONE_BASELINES/$id"
+  fi
   log "created clone '$id'."
   echo "$id"
+}
+
+clone_fingerprint() {
+  local dir="$1"
+  (
+    cd "$dir"
+    find . -mindepth 1 -printf '%y %m %P %l\n' | LC_ALL=C sort
+    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+  ) | sha256sum | cut -d' ' -f1
 }
 
 apply_to_role() {
@@ -134,12 +152,17 @@ apply_to_role() {
   fi
 
   mkdir -p "$BACKUPS_DIR"
-  local backup="$BACKUPS_DIR/$(date +%Y%m%d-%H%M%S).$id.$(basename "$file")"
+  local backup="$BACKUPS_DIR/$(date +%Y%m%d-%H%M%S.%N).$id.$(basename "$file")"
   cp "$file" "$backup"
   log "backed up $file -> $backup"
 
-  if patch -p1 --batch --no-backup-if-mismatch -d "$PLUGINS_DIR/$id" <"$patch"; then
+  if patch -p1 --batch --no-backup -d "$PLUGINS_DIR/$id" <"$patch"; then
     record_state "$id" applied
+    if [[ -f "$CREATED_CLONES/$id" && ! -f "$CLONE_BASELINES/$id" ]]; then
+      mkdir -p "$CLONE_BASELINES"
+      clone_fingerprint "$PLUGINS_DIR/$id" >"$CLONE_BASELINES/$id.tmp"
+      mv "$CLONE_BASELINES/$id.tmp" "$CLONE_BASELINES/$id"
+    fi
     log "patched $id."
   else
     log "patching $id FAILED; restoring backup." >&2
@@ -175,13 +198,12 @@ restore_role() {
     return 0
   fi
 
-  # 1) We held a backup of the pristine file -> restore it exactly.
+  # 1) If the user already restored the original, just clear our marker.
   local backup
   backup="$(ls -1t "$BACKUPS_DIR"/*."$id".$(basename "$file") 2>/dev/null | head -1 || true)"
-  if [[ -n $backup ]]; then
-    cp "$backup" "$file"
+  if [[ -n $backup ]] && cmp -s "$backup" "$file"; then
     clear_state "$id"
-    log "restored $file from backup."
+    log "$file is already pristine; cleared the plugin marker."
     return 0
   fi
 
@@ -192,18 +214,30 @@ restore_role() {
     return 0
   fi
 
-  # 3) Reverse-apply only our hunks. Co-existing user edits survive.
-  if [[ -f "$patch" ]] && patch -p1 -R --batch --dry-run -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null 2>&1; then
-    patch -p1 -R --batch -d "$PLUGINS_DIR/$id" <"$patch" >/dev/null
-    clear_state "$id"
-    log "reverted suppression patch in $id."
-    return 0
+  if [[ -n $backup && -f $patch ]] && command -v diff3 >/dev/null 2>&1; then
+    local restore_dir restore_entry merge_status
+    restore_dir="$(mktemp -d "${TMPDIR:-/tmp}/tide-island-restore.XXXXXX")"
+    restore_entry="$restore_dir/patched/$(basename "$file")"
+    mkdir -p "$(dirname "$restore_entry")"
+    cp -p "$backup" "$restore_entry"
+    if patch -p1 --batch --no-backup -d "$(dirname "$restore_entry")" <"$patch" >/dev/null 2>&1; then
+      merge_status=0
+      diff3 -m "$file" "$restore_entry" "$backup" >"$restore_dir/merged" || merge_status=$?
+      if (( merge_status == 0 )); then
+        chmod --reference="$file" "$restore_dir/merged"
+        mv -f "$restore_dir/merged" "$file"
+        clear_state "$id"
+        rm -rf -- "$restore_dir"
+        log "reverted the suppression patch in $id; unrelated clone edits were preserved."
+        return 0
+      fi
+    fi
+    rm -rf -- "$restore_dir"
   fi
 
   log "cannot automatically un-apply suppression in '$id' ($file) because it"
-  log "also differs from upstream in unrelated ways. Restore it manually, e.g."
-  log "  cp $upstream $file"
-  log "or re-clone the plugin. Nothing was changed." >&2
+  log "the current file conflicts with the patch. It and its backup were preserved."
+  log "Review $file and $backup, then restore or merge the suppression manually." >&2
   return 1
 }
 

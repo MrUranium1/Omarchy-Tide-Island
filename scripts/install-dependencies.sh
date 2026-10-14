@@ -39,6 +39,7 @@ REQUIRED=(
   "quickshell:quickshell:the QtQuick shell that renders Tide Island"
   "jq:jq:for reading the plugin config file"
   "patch:patch:for patching the OSD/notifications clones"
+  "diff3:diffutils:for restoring suppression patches while preserving clone edits"
 )
 OPTIONAL=(
   "python3:python:only for the pretty CLI status screen"

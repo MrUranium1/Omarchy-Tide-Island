@@ -395,13 +395,14 @@ Item {
     // If this plugin is *removed* (e.g. `omarchy plugin remove`, which deletes
     // the directory without running any hook) the shell destroys this service.
     // The directory is deleted just after that, so wait a moment and, only if
-    // it really is gone, undo the OSD/notification stand-down and everything
-    // else we installed. A hot-reload or a plain disable leaves the directory
-    // in place, so the guard makes this a no-op then.
+    // it really is gone, undo the OSD/notification stand-down and remove only
+    // unchanged plugin-owned runtime files. Config, edited clones, and recovery
+    // backups remain available for the user. A hot-reload or plain disable
+    // leaves the directory in place, so the guard makes this a no-op then.
     Component.onDestruction: {
         Quickshell.execDetached([
             "bash", "-c",
-            "sleep 3; bash \"$1\" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final",
+            "sleep 3; bash \"$1\" --remove-runtime --if-plugin-gone",
             "--", plugin.teardownHelper])
     }
 }

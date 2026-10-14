@@ -8,6 +8,7 @@ follows.
 
 `Service.qml`, `scripts/*`, `bin/*`, `install.sh`, `uninstall.sh`, `tests/*`,
 `packaging/hyprland-tide-island.lua`, `default/*`, `README.md`, `CHANGELOG.md`
+and `vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh`
 
 Copyright (c) 2026 Mehir — licensed under the MIT License (see LICENSE).
 
@@ -44,29 +45,32 @@ source code and must be distributed under Tide Island's license.
 
 ## Derived: Tide Island Omarchy integration (GPL-3.0-only)
 
-`vendor/tide-island/share/tide-island/scripts/omarchy-bridge.sh` (new)
 `vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml` (modified)
 `patches/tide/omarchy-theme-integration.patch` (record of the delta)
 
-These add Omarchy theme/wallpaper integration to the bundled Tide Island runtime
-(see `vendor/tide-island/PROVENANCE.md`, "Plugin additions"). They are derived
-from Tide Island source code and are distributed under Tide Island's
-GPL-3.0-only license, not under this repository's MIT license.
+The modified QML is derived from Tide Island source and remains under Tide
+Island's GPL-3.0-only license, not under this repository's MIT license. The
+patch file records both that QML change and the separately authored bridge
+script; its QML hunk is GPL-3.0-only and its bridge-script addition is MIT.
 
-- Source: https://github.com/enhaoswen/Tide-island (Tide Island, version 1.0.41)
+- Source: https://github.com/enhaoswen/Tide-island (Tide Island 1.0.41,
+  commit `e44fe2a5b7e09e0aacec98e18128ade662102f6f`)
 - License: **GPL-3.0-only** (`LICENSES/GPL-3.0-only.txt`)
 
 ## Bundled: Tide Island runtime (GPL-3.0-only)
 
-`vendor/tide-island/` is a copy of the Tide Island 1.0.41 runtime (launcher
-script, settings GUI, QML tree, compiled `TideIsland`/`IslandBackend` QML
-modules, lyrics backend), aside from the two Omarchy-integration files listed
-above. The plugin installs it, unprivileged, into the user's
-`~/.local/share/omarchy-tide-island` so the island works without the user
-installing the `tide-island` package.
+`vendor/tide-island/` contains the Tide Island 1.0.41 runtime (launcher script,
+settings GUI, QML tree, compiled `TideIsland`/`IslandBackend` QML modules,
+lyrics backend), with the GPL-modified QML listed above and the separately
+MIT-licensed Omarchy bridge script. The plugin installs it, unprivileged, into
+the user's `~/.local/share/omarchy-tide-island` so the island works without
+the user installing the `tide-island` package.
 
 - Source: https://github.com/enhaoswen/Tide-island (Tide Island, version 1.0.41)
-- License: **GPL-3.0-only** (`LICENSES/GPL-3.0-only.txt`)
+- Source commit: `e44fe2a5b7e09e0aacec98e18128ade662102f6f`
+- Tide Island files and Tide-derived modifications: **GPL-3.0-only**
+  (`LICENSES/GPL-3.0-only.txt`)
+- Original bridge script: **MIT** (see the repository root `LICENSE`)
 - See `vendor/tide-island/PROVENANCE.md` for the exact file list, the
   corresponding-source note, the plugin additions, and how the settings GUI is
   built.
@@ -81,12 +85,12 @@ itself, your changes to Quickshell remain under the LGPL.
 
 ## Scope of licenses
 
-The plugin's own code is one independent work (MIT). The Tide lyrics patch is a
-separate, Tide-derived work (GPL-3.0-only), and the bundled runtime in
-`vendor/tide-island/` is Tide Island itself (GPL-3.0-only). They are merely
-distributed together in this repository (an aggregate); the GPL obligations
-apply only to the GPL-covered patch and the vendored runtime, not to the
-MIT-licensed plugin.
+The plugin's orchestration code and original Omarchy bridge are MIT. The Tide
+lyrics patch, the modified Tide QML, and the upstream Tide runtime remain
+GPL-3.0-only. They are distributed together as an aggregate; the root MIT
+license does not relicense the Tide-derived files. `manifest.json` summarizes
+these distinct licenses in its single supported `license` string; this is not a
+claim that the repository has one uniform license.
 
 ## Shared config format
 

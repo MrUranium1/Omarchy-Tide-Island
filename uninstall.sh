@@ -26,10 +26,11 @@ usage() {
   cat <<USAGE
 Usage: uninstall.sh [--remove-plugin] [--purge-config] [--remove-runtime] [--help]
 
-  --remove-plugin   Also remove OSD/notifications clones we created ourselves
-                    and disable the tide-island plugin.
-  --purge-config    Delete ~/.config/omarchy/tide-island.json (defaults to
-                    keeping it so re-enabling is one command).
+  --remove-plugin   Request removal of unmodified OSD/notifications clones we
+                    created and disable the tide-island plugin. Edited or
+                    unverified clones are kept.
+  --purge-config    Prompt for the word PURGE before deleting
+                    ~/.config/omarchy/tide-island.json; default is to keep it.
   --remove-runtime  Also remove the bundled Tide Island installed under
                     ~/.local/share/omarchy-tide-island (unit, PATH link, files).
   --help            Show this help.

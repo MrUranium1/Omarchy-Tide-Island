@@ -194,6 +194,21 @@ bash -n "$ROOT/vendor/tide-island/bin/tide-island" \
 grep -q 'GNU GENERAL PUBLIC LICENSE' "$ROOT/LICENSES/GPL-3.0-only.txt" \
   && t "GPL-3.0 text present" && ok || ko
 
+echo "  Tide Island integration patch"
+mkdir -p "$tmp/theme-roundtrip"
+cp -a "$ROOT/vendor/tide-island/share" "$tmp/theme-roundtrip/"
+(
+  cd "$tmp/theme-roundtrip"
+  patch -p1 -R --batch --fuzz=0 --dry-run <"$ROOT/patches/tide/omarchy-theme-integration.patch" >/dev/null
+  patch -p1 -R --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-theme-integration.patch" >/dev/null
+  patch -p1 --batch --fuzz=0 <"$ROOT/patches/tide/omarchy-theme-integration.patch" >/dev/null
+) && t "main integration patch reverses and reapplies with zero fuzz" && ok || ko
+diff -qr "$tmp/theme-roundtrip/share" "$ROOT/vendor/tide-island/share" >/dev/null \
+  && t "integration patch round-trip reproduces vendored share tree byte-for-byte" && ok || ko
+cmp -s "$tmp/theme-roundtrip/share/tide-island/qml/island/WallpaperPickerLayer.qml" \
+  "$ROOT/vendor/tide-island/share/tide-island/qml/island/WallpaperPickerLayer.qml" \
+  && t "patched theme picker exactly matches vendored source" && ok || ko
+
 echo "  bash syntax"
 while IFS= read -r -d '' f; do
   bash -n "$f" && ok || { t "syntax error in $f" && ko; }

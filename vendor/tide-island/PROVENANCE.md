@@ -5,7 +5,10 @@ plugin can install the island without the user installing the `tide-island`
 package. It is third-party software, **not** part of this plugin's own MIT code.
 
 - Upstream: https://github.com/enhaoswen/Tide-island
-- Version: `1.0.41` (Arch package `tide-island 1.0.41-1`, upstream `main`)
+- Version: `1.0.41` (Arch package `tide-island 1.0.41-1`)
+- Immutable upstream source commit:
+  [`e44fe2a5b7e09e0aacec98e18128ade662102f6f`](https://github.com/enhaoswen/Tide-island/commit/e44fe2a5b7e09e0aacec98e18128ade662102f6f)
+  (the dereferenced `1.0.41` tag commit)
 - License: **GPL-3.0-only** — see `LICENSES/GPL-3.0-only.txt` at the repo root.
 
 ## What is bundled
@@ -30,13 +33,13 @@ share/applications/tide-island-config.desktop
 
 ## Corresponding source
 
-The bundled files are unmodified copies of the upstream 1.0.41 build, with the
-single exception described under "Plugin additions" below. Their corresponding
-source is the upstream repository above; see the GPL-3.0-only text for the
-license terms.
+The bundled files correspond to the upstream 1.0.41 release at the immutable
+commit above, with the plugin additions described below. Their corresponding
+source is the upstream repository at that commit; see the GPL-3.0-only text for
+the license terms.
 
 The one exception among the copied files is `bin/tide-island-config-app`, which
-is compiled from the upstream 1.0.41 source tarball (`Tide-island-app/`, the
+is compiled from the `Tide-island-app/` source at the same upstream commit (the
 upstream CMake build, `-DCMAKE_INSTALL_PREFIX=/usr`, release build, no patches)
 rather than copied from a binary package. Its own QML is embedded in the binary
 as Qt resources; `share/applications/tide-island-config.desktop` differs from
@@ -60,5 +63,6 @@ Two things differ from upstream 1.0.41:
 Both are copied verbatim to the install prefix, so no install-time patching is
 involved. The full delta from upstream is recorded for auditability at
 `patches/tide/omarchy-theme-integration.patch` (paths relative to this
-directory; apply with `patch -p1`). These files remain under the same
-GPL-3.0-only license as the rest of the runtime.
+directory; apply with `patch -p1`). The modified QML remains under
+GPL-3.0-only; the original bridge script is MIT-licensed under the repository's
+root `LICENSE`.

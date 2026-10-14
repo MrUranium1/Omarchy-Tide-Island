@@ -187,16 +187,35 @@ cmp -s "$TIDE_USERCONFIG" "$ROOT/default/tide-userconfig.json" && ok "seeded Tid
 [[ "$(cat "$PREFIX/.version" 2>/dev/null)" == "$(cat "$ROOT/vendor/tide-island/VERSION")" ]] && ok "runtime version marker intact after re-run" || ko "runtime version marker changed"
 
 echo "  uninstall (default)"
+printf '\n// user customization survives uninstall\n' >>"$PLUGINS/mehir.osd/Osd.qml"
+printf 'user-owned extra file\n' >"$PLUGINS/mehir.osd/User.qml"
+cp "$PLUGINS/mehir.osd/Osd.qml" "$SB/osd.user-edited"
+cp "$PLUGINS/mehir.osd/User.qml" "$SB/clone-user-file"
 (cd "$ROOT" && bash uninstall.sh) >"$SB/u1.log" 2>&1 && ok "uninstall exits 0" || { ko "uninstall failed"; tail -n20 "$SB/u1.log"; }
 [[ ! -e "$HOME/.local/bin/omarchy-tide-island-toggle" ]] && ok "shim removed" || ko "shim remains"
 [[ -f "$CONFIG" ]] && ok "config preserved by default" || ko "config removed by default"
-[[ ! -f "$TIDE_USERCONFIG" ]] && ok "untouched seeded Tide config removed on uninstall" || ko "seeded Tide config remains"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ko "patch not reverted" || ok "clone patch reverted"
+grep -q 'user customization survives uninstall' "$PLUGINS/mehir.osd/Osd.qml" \
+  && ok "user edits to the OSD clone survive patch restoration" || ko "clone user edit was lost"
+cmp -s "$PLUGINS/mehir.osd/User.qml" "$SB/clone-user-file" \
+  && ok "user-owned files in the OSD clone survive uninstall" || ko "clone user file was lost"
+cmp -s "$PLUGINS/mehir.osd/Osd.qml" "$SB/osd.user-edited" \
+  && ko "suppression patch remains in the clone" || ok "only suppression hunks changed in the clone"
+[[ -f "$TIDE_USERCONFIG" ]] && ok "seeded Tide config is preserved by ordinary removal" || ko "Tide user config removed"
 
 echo "  uninstall --remove-plugin --purge-config"
-(cd "$ROOT" && bash uninstall.sh --remove-plugin --purge-config) >"$SB/u2.log" 2>&1 && ok "uninstall --remove-plugin exits 0" || { ko "failed"; tail -n20 "$SB/u2.log"; }
-[[ ! -d "$PLUGINS/mehir.osd" ]] && ok "osd clone removed" || ko "osd clone not removed"
+if (cd "$ROOT" && bash uninstall.sh --purge-config) </dev/null >"$SB/u2-cancel.log" 2>&1; then
+  ko "config purge without typed confirmation succeeded"
+else
+  [[ -f $CONFIG ]] && ok "config purge requires explicit typed confirmation" || ko "cancelled purge removed config"
+fi
+printf 'PURGE\n' | (cd "$ROOT" && bash uninstall.sh --remove-plugin --purge-config) >"$SB/u2.log" 2>&1 && ok "confirmed uninstall --remove-plugin exits 0" || { ko "failed"; tail -n20 "$SB/u2.log"; }
+[[ -d "$PLUGINS/mehir.osd" ]] && ok "modified OSD clone is preserved instead of removed" || ko "user-edited OSD clone was deleted"
+grep -q 'user customization survives uninstall' "$PLUGINS/mehir.osd/Osd.qml" \
+  && ok "clone edits remain after explicit clone cleanup request" || ko "clone edits were lost"
 [[ ! -f "$CONFIG" ]] && ok "config purged" || ko "config not purged"
+find "$STATE/backups" -maxdepth 1 -type f -name '*.tide-island.*.json' -print -quit | grep -q . \
+  && ok "configuration recovery backup is retained" || ko "config backup is missing"
 
 echo "  reinstall"
 (cd "$ROOT" && bash install.sh) >"$SB/i3.log" 2>&1 && ok "reinstall exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i3.log"; }
@@ -224,25 +243,28 @@ echo "  automatic reap when the plugin is removed via 'omarchy plugin remove'"
 (cd "$ROOT" && bash install.sh) >"$SB/i4.log" 2>&1 && ok "reinstall before reap exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i4.log"; }
 HELPER="$HOME/.local/lib/omarchy-tide-island/teardown.sh"
 [[ -f $HELPER ]] && ok "teardown helper installed outside the plugin dir" || ko "teardown helper missing"
+[[ -f "$HOME/.local/lib/omarchy-tide-island/patches/omarchy-osd-suppression.patch" ]] \
+  && ok "automatic teardown carries its recovery patch" || ko "recovery patch not installed"
 mkdir -p "$PLUGINS/mehir.tide-island"
-bash "$HELPER" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap-guard.log" 2>&1
+bash "$HELPER" --remove-runtime --if-plugin-gone >"$SB/reap-guard.log" 2>&1
 [[ -d "$PLUGINS/mehir.tide-island" ]] && ok "guard: plugin untouched while installed" || ko "guard removed the installed plugin"
 [[ -d "$PLUGINS/mehir.osd" ]] && ok "guard: suppression clones untouched while installed" || ko "guard removed suppression clones"
 [[ -d "$STATE" ]] && ok "guard: state untouched while installed" || ko "guard wiped state while installed"
 omarchy plugin remove mehir.tide-island --yes >/dev/null 2>&1
 [[ ! -d "$PLUGINS/mehir.tide-island" ]] && ok "plugin removed via omarchy" || ko "plugin not removed"
-bash "$HELPER" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap.log" 2>&1 \
+bash "$HELPER" --remove-runtime --if-plugin-gone >"$SB/reap.log" 2>&1 \
   && ok "reap exits 0" || { ko "reap failed"; tail -n20 "$SB/reap.log"; }
-[[ ! -e "$PLUGINS/mehir.osd" && ! -e "$PLUGINS/mehir.notifications" ]] \
-  && ok "suppression clones removed by reap" || ko "suppression clones remain after reap"
+[[ -d "$PLUGINS/mehir.osd" && -d "$PLUGINS/mehir.notifications" ]] \
+  && ok "automatic reap preserves suppression clones" || ko "automatic reap deleted suppression clones"
 grep -rq 'The bar-off marker' "$PLUGINS" 2>/dev/null \
   && ko "OSD suppression still active after reap" || ok "OSD suppression undone by reap"
 grep -rq 'popupsSuppressed' "$PLUGINS" 2>/dev/null \
   && ko "notification suppression still active after reap" || ok "notification suppression undone by reap"
-[[ ! -e "$CONFIG" ]] && ok "config purged by reap" || ko "config remains after reap"
+[[ -e "$CONFIG" ]] && ok "automatic reap preserves plugin configuration" || ko "automatic reap purged config"
 [[ ! -e "$PREFIX" ]] && ok "runtime removed by reap" || ko "runtime remains after reap"
-[[ ! -e "$STATE" ]] && ok "state removed by reap" || ko "state remains after reap"
-[[ ! -e "$HOME/.local/lib/omarchy-tide-island" ]] && ok "teardown helper cleaned up" || ko "helper remains"
+[[ -e "$STATE" ]] && ok "state and recovery backups retained by reap" || ko "reap removed recovery state"
+[[ -e "$HOME/.local/lib/omarchy-tide-island/teardown.sh" ]] \
+  && ok "teardown helper retained with recovery data" || ko "helper removed prematurely"
 [[ -f "$TIDE_USERCONFIG" ]] && grep -q 200 "$TIDE_USERCONFIG" \
   && ok "customized Tide config survives the reap too" || ko "reap deleted a customized Tide config"
 
@@ -252,14 +274,14 @@ rm -f "$STATE/installed.json"
 rm -rf "$STATE/patch-state"
 mkdir -p "$PLUGINS/mehir.tide-island"
 omarchy plugin remove mehir.tide-island --yes >/dev/null 2>&1
-bash "$HOME/.local/lib/omarchy-tide-island/teardown.sh" --remove-clones --remove-runtime --purge-config --if-plugin-gone --final >"$SB/reap2.log" 2>&1 \
+bash "$HOME/.local/lib/omarchy-tide-island/teardown.sh" --remove-clones --remove-runtime --if-plugin-gone >"$SB/reap2.log" 2>&1 \
   && ok "state-less reap exits 0" || { ko "reap failed"; tail -n20 "$SB/reap2.log"; }
-[[ ! -e "$PLUGINS/mehir.osd" && ! -e "$PLUGINS/mehir.notifications" ]] \
-  && ok "clones removed even without installed.json" || ko "clones survived the state-less reap"
+[[ -d "$PLUGINS/mehir.osd" && -d "$PLUGINS/mehir.notifications" ]] \
+  && ok "state-less reap conservatively preserves clones" || ko "state-less reap deleted clones"
 grep -rq 'The bar-off marker\|popupsSuppressed' "$PLUGINS" 2>/dev/null \
   && ko "suppression survived the state-less reap" || ok "suppression fully undone without state"
-[[ ! -e "$STATE" && ! -e "$HOME/.local/lib/omarchy-tide-island" ]] \
-  && ok "state + helper reclaimed by state-less reap" || ko "reap leftovers remain"
+[[ -e "$STATE" && -e "$HOME/.local/lib/omarchy-tide-island/teardown.sh" ]] \
+  && ok "state-less reap retains backups and helper" || ko "state-less reap discarded recovery data"
 
 echo "  removal without --final clears the setup marker so a re-add sets up again"
 (cd "$ROOT" && bash install.sh) >"$SB/i7.log" 2>&1 && ok "install before marker-clear test exits 0" || { ko "install failed"; tail -n20 "$SB/i7.log"; }
@@ -347,6 +369,9 @@ grep -q -- "$PREFIX/share/tide-island call tide swipeLeft" "$HYPRLUA" \
 grep -q 'hl.workspace' "$HYPRLUA" && ok "pre-existing hyprland.lua content preserved" || ko "existing content lost"
 jq -e '.shortcutBinding.createdByUs == true and .shortcutBinding.wired == true' "$STATE/installed.json" >/dev/null 2>&1 \
   && ok "installed.json records the shortcut block" || ko "installed.json missing shortcutBinding"
+jq -e '.keybinding.requireCreatedByUs == true and .keybinding.moduleCreatedByUs == true' \
+  "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "installed.json records exact Hyprland require/module ownership" || ko "Hyprland ownership is not recorded"
 
 echo "  repeated install keeps a single block"
 (cd "$ROOT" && bash install.sh) >"$SB/k2.log" 2>&1 && ok "repeat install exits 0" || ko "repeat install failed"
@@ -355,11 +380,22 @@ if [[ "$(grep -c 'begin (managed' "$HYPRLUA")" == 1 && "$(grep -c 'hl\.bind(' "$
 else
   ko "repeat install changed the block"
 fi
+jq -e '.keybinding.requireCreatedByUs == true and .keybinding.moduleCreatedByUs == true' \
+  "$STATE/installed.json" >/dev/null 2>&1 \
+  && ok "repeat install preserves Hyprland ownership metadata" || ko "repeat install lost Hyprland ownership metadata"
 
 echo "  uninstall removes a block it created, preserving other content"
+printf '%s\n' '-- unrelated note mentioning hypr.tide-island' \
+  'require("my.custom.hypr.tide-island")' >>"$HYPRLUA"
 (cd "$ROOT" && bash uninstall.sh) >"$SB/k3.log" 2>&1 && ok "uninstall exits 0" || { ko "uninstall failed"; tail -n20 "$SB/k3.log"; }
 grep -q -- '-- Tide Island shortcuts: begin' "$HYPRLUA" && ko "uninstall left our block behind" || ok "uninstall removed our block"
 grep -q 'hl.workspace' "$HYPRLUA" && ok "uninstall preserved unrelated hyprland.lua content" || ko "uninstall damaged hyprland.lua"
+grep -Fxq -- '-- unrelated note mentioning hypr.tide-island' "$HYPRLUA" \
+  && ok "uninstall preserves unrelated lines mentioning hypr.tide-island" || ko "unrelated matching comment removed"
+grep -Fxq 'require("my.custom.hypr.tide-island")' "$HYPRLUA" \
+  && ok "uninstall removes only the exact managed require line" || ko "unrelated require removed"
+[[ ! -e "$HOME/.config/hypr/tide-island.lua" ]] \
+  && ok "uninstall removes the unchanged plugin-created module" || ko "plugin-created module remains"
 
 echo "  settings-app edit survives install and uninstall"
 (cd "$ROOT" && bash install.sh) >"$SB/k4.log" 2>&1 && ok "reinstall exits 0" || ko "reinstall failed"
@@ -443,6 +479,16 @@ cmp -s "$TIDE_USERCONFIG" "$SB/userconfig.before" \
   && ok "install leaves the customized Tide config byte-for-byte" || ko "install overwrote the user's Tide config"
 jq -e '.tideUserConfig.seeded == false' "$STATE/installed.json" >/dev/null 2>&1 \
   && ok "installed.json records that no seed was forced over the user's config" || ko "install wrongly recorded a Tide config seed"
+
+echo "  modified CLI shim survives reinstall and removal"
+printf '# user-owned wrapper\n' >>"$HOME/.local/bin/omarchy-tide-island-status"
+cp "$HOME/.local/bin/omarchy-tide-island-status" "$SB/status.user-edited"
+(cd "$ROOT" && bash install.sh) >"$SB/shim-reinstall.log" 2>&1 && ok "reinstall with an edited shim exits 0" || ko "reinstall failed"
+cmp -s "$HOME/.local/bin/omarchy-tide-island-status" "$SB/status.user-edited" \
+  && ok "reinstall preserves a user-modified shim" || ko "reinstall overwrote the edited shim"
+(cd "$ROOT" && bash uninstall.sh) >"$SB/shim-uninstall.log" 2>&1 && ok "uninstall after shim edit exits 0" || ko "uninstall failed"
+cmp -s "$HOME/.local/bin/omarchy-tide-island-status" "$SB/status.user-edited" \
+  && ok "uninstall preserves a user-modified shim" || ko "uninstall deleted the edited shim"
 
 echo
 echo "cleanroom: $pass passed, $fail failed"
