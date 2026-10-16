@@ -24,6 +24,9 @@ All notable changes to the mehir.tide-island plugin.
   main theme integration patch and added a zero-fuzz round-trip test.
 - Corrected shortcut parity expectations, GPL license text, Tide Island source
   commit provenance, and the repository's mixed-license descriptions.
+- Hardened the clipboard panel's image cache: decoded clipboard PNGs and their
+  directory are private regardless of the inherited umask, and caches left
+  world-readable by earlier builds are repaired in place.
 
 ## [0.1.0] - 2026-10-13
 

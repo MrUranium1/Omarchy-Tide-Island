@@ -213,6 +213,7 @@ Desktop entries and the bundled runtime are tracked by content fingerprint: anyt
 
 ```sh
 bash tests/unit.sh       # offline: sync state machine, config parity, patch applicability
+bash tests/cliphist.sh   # offline: clipboard image cache privacy (cliphist-helper.sh)
 bash tests/smoke.sh      # repo self-check, incl. shell schema validation and shortcut collisions
 bash tests/cleanroom.sh  # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
 bash tests/live.sh       # needs a live Omarchy session; toggles bar/Tide and verifies

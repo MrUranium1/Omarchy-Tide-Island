@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
 set -e
 
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tide-island/cliphist-imgs"
+# Clipboard history is private: nothing this helper writes may be readable by
+# group or others, whatever umask the calling shell happened to inherit
+# (022 and 002 are common desktop defaults).
+umask 077
+
+# XDG_CACHE_HOME counts only when it is an absolute path; an empty or
+# relative value falls back to $HOME/.cache (XDG Base Directory spec).
+if [[ -n ${XDG_CACHE_HOME:-} && $XDG_CACHE_HOME == /* ]]; then
+    CACHE_BASE="$XDG_CACHE_HOME"
+else
+    CACHE_BASE="${HOME:?HOME is not set, so no cache location can be resolved}/.cache"
+fi
+CACHE_DIR="$CACHE_BASE/tide-island/cliphist-imgs"
+
+# umask 077 lands a freshly created directory at 0700, and chmod repairs one
+# an older install left at the permissive umask default. Both run before any
+# clipboard image is decoded, and a failure aborts the action so images are
+# never written into a directory other users can enter.
 mkdir -p "$CACHE_DIR"
+chmod 0700 "$CACHE_DIR"
+# PNGs decoded before this fix may still carry the old mode; the private
+# directory already keeps others out, so tighten those files as well.
+find "$CACHE_DIR" -maxdepth 1 -type f -name '*.png' -exec chmod 0600 {} + || true
 
 ACTION="${1:-list}"
 
