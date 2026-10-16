@@ -164,7 +164,7 @@ for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json"
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
          "scripts/ensure-mount.sh" "scripts/teardown.sh" "scripts/wire-shortcuts.sh" \
-         "scripts/harden-tide-config.sh" \
+         "scripts/harden-tide-config.sh" "scripts/migrate.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
@@ -339,6 +339,19 @@ else
 fi
 grep -q 'syncSuppression' "$ROOT/scripts/ensure-mount.sh" \
   && t "ensure-mount verifies the mount over the shell IPC" && ok || ko
+
+echo "  migrate.sh contract"
+if timeout 5 "$ROOT/scripts/migrate.sh" --help >/dev/null 2>&1; then
+  t "migrate.sh --help exits 0" && ok
+else
+  t "migrate.sh --help did not exit cleanly" && ko
+fi
+grep -q 'install-tide-runtime.sh' "$ROOT/scripts/migrate.sh" \
+  && grep -q 'harden-tide-config.sh' "$ROOT/scripts/migrate.sh" \
+  && t "migrate refreshes the bundled runtime and hardens the config" && ok || ko
+grep -q 'migrateScript' "$ROOT/Service.qml" \
+  && grep -q 'maybeMigrate' "$ROOT/Service.qml" \
+  && t "the shell service runs the migration on every load" && ok || ko
 
 echo "  wire-shortcuts.sh contract"
 if timeout 5 "$ROOT/scripts/wire-shortcuts.sh" --help >/dev/null 2>&1; then

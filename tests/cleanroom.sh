@@ -25,6 +25,12 @@ done
 SB="$(mktemp -d "${TMPDIR:-/tmp}/tide-island-cleanroom.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
 export HOME="$SB/home"
+# Point XDG_CONFIG_HOME into the sandbox too: the hardened launcher, the
+# migration, and harden-tide-config.sh are XDG-aware (they follow the app's
+# configHome()) while install.sh seeds $HOME/.config. Keeping them inside the
+# sandbox models a real session (where XDG points under $HOME) and stops the
+# sandbox touching the real ~/.config.
+export XDG_CONFIG_HOME="$HOME/.config"
 # Force the bundled runtime path even though this machine may have the
 # tide-island package on PATH; the sandbox has its own $HOME.
 export TIDE_ISLAND_FORCE_BUNDLE=1
@@ -233,6 +239,44 @@ grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "rei
   && ok "reinstall repairs a permissive config directory to 0700" || ko "config directory left permissive"
 [[ "$(stat -c '%a' "$TIDE_USERCONFIG")" == 600 ]] \
   && ok "reinstall repairs a world-readable userconfig to 0600" || ko "userconfig left world-readable"
+
+echo "  upgrade with an existing setup marker migrates the runtime + config"
+# Model an install that predates the hardened launcher: an existing
+# auto-setup.done marker (so first-load auto-setup is skipped), the native app
+# at bin/tide-island-config-app with no wrapper/.real, and a loose userconfig.
+# The shell service then runs scripts/migrate.sh on every load instead of
+# re-running setup, and must refresh the runtime to the hardened launcher and
+# repair the config without losing the marker or the saved values.
+: >"$STATE/auto-setup.done"
+cp -f "$PREFIX/bin/tide-island-config-app.real" "$PREFIX/bin/tide-island-config-app"
+chmod 0755 "$PREFIX/bin/tide-island-config-app"
+rm -f "$PREFIX/bin/tide-island-config-app.real"
+( cd "$PREFIX" && find bin lib share -type f -print0 | sort -z \
+  | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1 ) >"$PREFIX/.content-sha256"
+printf '{ "islandWidth": 321 }\n' >"$TIDE_USERCONFIG"
+chmod 0755 "$HOME/.config/tide-island"
+chmod 0644 "$TIDE_USERCONFIG"
+rm -f "$STATE/migrate.sha256"
+grep -q 'umask 077' "$PREFIX/bin/tide-island-config-app" 2>/dev/null \
+  && ko "precondition: config-app was not downgraded to the native binary" \
+  || ok "precondition: installed config-app is the pre-fix native binary"
+(cd "$ROOT" && bash scripts/migrate.sh --auto) >"$SB/m1.log" 2>&1 \
+  && ok "migrate exits 0" || { ko "migrate failed"; tail -n20 "$SB/m1.log"; }
+grep -q 'umask 077' "$PREFIX/bin/tide-island-config-app" 2>/dev/null \
+  && grep -q 'tide-island-config-app.real' "$PREFIX/bin/tide-island-config-app" 2>/dev/null \
+  && ok "migration installs the hardened launcher" || ko "hardened launcher not installed"
+[[ -x "$PREFIX/bin/tide-island-config-app.real" ]] \
+  && ok "migration restores the native app beside the wrapper" || ko "native app missing"
+[[ "$(readlink -f "$HOME/.local/bin/tide-island-config-app" 2>/dev/null)" == "$PREFIX/bin/tide-island-config-app" ]] \
+  && ok "config-app launch path still resolves to the hardened launcher" || ko "config-app launch path broken"
+[[ "$(stat -c '%a' "$HOME/.config/tide-island")" == 700 ]] \
+  && ok "migration repairs the config directory to 0700" || ko "config dir left permissive"
+[[ "$(stat -c '%a' "$TIDE_USERCONFIG")" == 600 ]] \
+  && ok "migration repairs the userconfig to 0600" || ko "userconfig left readable"
+grep -q 321 "$TIDE_USERCONFIG" \
+  && ok "migration preserves a customized Tide config" || ko "migration lost the custom config"
+[[ -f "$STATE/auto-setup.done" ]] \
+  && ok "migration preserves the setup marker (no re-setup required)" || ko "setup marker lost"
 
 echo "  customized Tide config survives uninstall"
 echo '{ "islandWidth": 200 }' >"$TIDE_USERCONFIG"

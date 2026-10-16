@@ -30,6 +30,14 @@ Item {
         Qt.resolvedUrl("scripts/tide-sync.sh").toString().replace("file://", "")
     readonly property string setupScript:
         Qt.resolvedUrl("scripts/plugin-setup.sh").toString().replace("file://", "")
+    // Upgrade migration for already-configured installations. An install that
+    // already has the setup marker never re-runs auto-setup, so a plugin update
+    // would otherwise leave the OLD bundled runtime (whose settings app is not
+    // the hardened launcher) and a possibly group/world-readable userconfig.json
+    // in place. This runs on every load, independent of the marker, and is a
+    // cheap no-op once the bundled migration generation is current.
+    readonly property string migrateScript:
+        Qt.resolvedUrl("scripts/migrate.sh").toString().replace("file://", "")
     // Detached mount-verify: bounces the shell's mounted plugin set after the
     // OSD/notifications clones are patched, so the patched clones are the ones
     // serving at runtime (not on the next shell boot). Runs detached because
@@ -207,6 +215,45 @@ Item {
     onOsdSuppressionChanged: plugin.needsSetup = plugin.setupNeeded()
     onNotificationsSuppressionChanged: plugin.needsSetup = plugin.setupNeeded()
     onCliInstalledChanged: plugin.needsSetup = plugin.setupNeeded()
+
+    // Upgrade migration: runs on EVERY load, before auto-setup, independent of
+    // the auto-setup.done marker. It refreshes the bundled runtime (so the
+    // settings app is the hardened launcher) and re-tightens the Tide config
+    // permissions for installations that were set up before this fix. It is a
+    // cheap no-op once the bundled migration generation is current. Kept before
+    // auto-setup so the two never install the shared runtime concurrently.
+    property bool migrationTried: false
+
+    function maybeMigrate() {
+        if (plugin.migrationTried) return
+        plugin.migrationTried = true
+        if (migrateScript === "") { plugin.afterMigration(); return }
+        migrateProc.running = true
+    }
+
+    Process {
+        id: migrateProc
+        running: false
+        command: ["bash", plugin.migrateScript, "--auto"]
+        onExited: (code) => {
+            if (code === 0) {
+                console.log("tide-island: upgrade migration complete (runtime current, config private).")
+            } else {
+                console.warn("tide-island: upgrade migration exited " + code + "; the hardened launcher and config repair will retry on the next shell start.")
+            }
+            plugin.afterMigration()
+        }
+    }
+
+    function afterMigration() {
+        autoSetupDelay.start()
+    }
+
+    Timer {
+        id: migrationDelay
+        interval: 1200
+        onTriggered: plugin.maybeMigrate()
+    }
 
     // Auto-setup on first load: a freshly added plugin installs the bundled
     // runtime, CLI shims and OSD/notification stand-down once, silently, so
@@ -389,7 +436,9 @@ Item {
         configFile.reload()
         plugin.probeBar()
         plugin.scheduleReconcile()
-        autoSetupDelay.start()
+        // Migrate first; afterMigration() starts the auto-setup delay so the
+        // two never touch the shared bundled runtime at the same time.
+        migrationDelay.start()
     }
 
     // If this plugin is *removed* (e.g. `omarchy plugin remove`, which deletes

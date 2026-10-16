@@ -50,6 +50,15 @@ All notable changes to the mehir.tide-island plugin.
   QSaveFile temp file) stays user-only. If the password file would still be
   readable by others after repair, the wrapper refuses to start the GUI instead
   of running with the loose mode.
+- Migrated existing installations on upgrade. An install that already has the
+  `auto-setup.done` marker never re-ran setup, so `omarchy plugin update` left
+  the OLD bundled runtime (whose settings app was not the hardened launcher) and
+  a possibly group/world-readable `userconfig.json` in place. The service now
+  runs an idempotent `scripts/migrate.sh` on every load, independent of the
+  marker: it refreshes the bundled runtime so the config-app launch path is the
+  hardened launcher, and repairs the config directory/file to `0700`/`0600` in
+  place — preserving the marker, the saved password, and any customized config,
+  never following symlinks, and refusing to clobber a user-modified runtime.
 
 ## [0.1.0] - 2026-10-13
 

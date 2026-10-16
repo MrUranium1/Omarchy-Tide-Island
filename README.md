@@ -206,6 +206,7 @@ Desktop entries and the bundled runtime are tracked by content fingerprint: anyt
 ## 📋 Compatibility
 
 - The stand-down patches Omarchy's first-party `omarchy.osd` / `omarchy.notifications`, so it is **version sensitive**. If Omarchy changes those plugins, `scripts/ensure-suppression.sh` may need updating. `tests/unit.sh` checks the patches apply and reverse cleanly.
+- Upgrading in place (`omarchy plugin update`) refreshes the bundled runtime and repairs the Tide config permissions automatically on the next shell start, via `scripts/migrate.sh`, even for an installation that already completed setup — no need to re-run setup or delete `auto-setup.done`.
 - Immediate serving of the patched clones relies on Omarchy's shell IPC (`omarchy-shell <target> syncSuppression` and `shell rescanPlugins`). If that changes, `scripts/ensure-mount.sh` fails safe: it logs why, writes no "setup complete" marker, and retries on the next shell start.
 - Verified against the first-party OSD/notifications of the Omarchy version current at the time of writing.
 
@@ -215,6 +216,7 @@ Desktop entries and the bundled runtime are tracked by content fingerprint: anyt
 bash tests/unit.sh         # offline: sync state machine, config parity, patch applicability
 bash tests/cliphist.sh     # offline: clipboard image cache privacy (cliphist-helper.sh)
 bash tests/config-perms.sh # offline: settings config permissions (0700/0600, hardened launcher)
+bash tests/migrate.sh      # offline: upgrade migration (existing setup, old runtime, loose config)
 bash tests/smoke.sh        # repo self-check, incl. shell schema validation and shortcut collisions
 bash tests/cleanroom.sh    # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
 bash tests/live.sh         # needs a live Omarchy session; toggles bar/Tide and verifies
