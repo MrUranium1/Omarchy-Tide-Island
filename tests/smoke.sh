@@ -279,6 +279,20 @@ for net_spec in \
   esac
 done
 
+echo "  notification capsule renders notification content as plain text"
+# A notification's app/summary/body is attacker-controlled, and the transient
+# capsule previously inherited Text.AutoText: escaped markup decoded back into
+# live HTML (e.g. <img src=…>) would then be parsed as rich text and fetch a
+# URL. Every Text rendering the capsule content must force PlainText.
+notif_rc=0
+require_text_plain "$ROOT/vendor/tide-island/share/tide-island/qml/island/NotificationLayer.qml" \
+  'text: contentText' || notif_rc=$?
+case $notif_rc in
+  0) t "every Text rendering notification content sets Text.PlainText" && ok ;;
+  2) t "no Text renders notification content - regression anchor missing" && ko ;;
+  *) t "a Text renders notification content without Text.PlainText" && ko ;;
+esac
+
 echo "  Tide Island integration patch"
 mkdir -p "$tmp/theme-roundtrip"
 cp -a "$ROOT/vendor/tide-island/share" "$tmp/theme-roundtrip/"

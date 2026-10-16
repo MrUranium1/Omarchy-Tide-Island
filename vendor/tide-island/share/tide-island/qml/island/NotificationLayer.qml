@@ -86,6 +86,7 @@ Item {
         opacity: 0
         width: textBlockWidthAtMaximum
         text: contentText
+        textFormat: Text.PlainText
         font.pixelSize: userConfig.bodyFontSize
         font.family: textFontFamily
         font.weight: Font.DemiBold
@@ -102,6 +103,7 @@ Item {
         opacity: 0
         width: expandedTextBlockWidthAtMaximum
         text: contentText
+        textFormat: Text.PlainText
         font.pixelSize: userConfig.bodyFontSize
         font.family: textFontFamily
         font.weight: Font.DemiBold
@@ -138,6 +140,7 @@ Item {
                 visible: !(root.expanded && root.hasOverflowContent)
                 anchors.verticalCenter: parent.verticalCenter
                 text: contentText
+                textFormat: Text.PlainText
                 color: "white"
                 font.pixelSize: userConfig.bodyFontSize
                 font.family: textFontFamily
@@ -164,6 +167,7 @@ Item {
                     id: expandedContentText
                     width: expandedFlickable.width
                     text: contentText
+                    textFormat: Text.PlainText
                     color: "white"
                     font.pixelSize: userConfig.bodyFontSize
                     font.family: textFontFamily

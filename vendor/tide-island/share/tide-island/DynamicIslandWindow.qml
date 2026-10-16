@@ -1495,13 +1495,23 @@ PanelWindow {
         }
 
         function cleanNotificationText(text) {
+            // Decode character references *before* stripping tags, and decode
+            // the bare ampersand last, so the decoder can never open a fresh
+            // entity. Stripping after decoding means an escaped or encoded tag
+            // such as "&lt;img src=x&gt;" or "&#60;img src=x&#62;" is removed
+            // exactly like a literal one instead of being decoded back into
+            // live markup.
             return String(text === undefined || text === null ? "" : text)
-                .replace(/<[^>]*>/g, " ")
                 .replace(/&nbsp;/g, " ")
-                .replace(/&amp;/g, "&")
                 .replace(/&quot;/g, "\"")
                 .replace(/&lt;/g, "<")
                 .replace(/&gt;/g, ">")
+                .replace(/&#x0*3c;/gi, "<")
+                .replace(/&#x0*3e;/gi, ">")
+                .replace(/&#0*60;/g, "<")
+                .replace(/&#0*62;/g, ">")
+                .replace(/&amp;/g, "&")
+                .replace(/<[^>]*>/g, " ")
                 .replace(/\s+/g, " ")
                 .trim();
         }

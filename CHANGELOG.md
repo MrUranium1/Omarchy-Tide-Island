@@ -59,6 +59,16 @@ All notable changes to the mehir.tide-island plugin.
   hardened launcher, and repairs the config directory/file to `0700`/`0600` in
   place — preserving the marker, the saved password, and any customized config,
   never following symlinks, and refusing to clobber a user-modified runtime.
+- Stopped parsing notification content as rich text. The transient notification
+  capsule rendered the app/summary/body with Qt Quick's default
+  `Text.AutoText`, and the shared sanitizer stripped tags *before* decoding
+  character references, so an escaped tag (`&lt;img src=x&gt;`) was decoded
+  back into live markup that `Text.AutoText` then parsed and fetched. The
+  sanitizer now decodes references first (the bare `&amp;` last, plus the
+  numeric forms of the tag delimiters, `&#60;`/`&#x3c;` and `&#62;`/`&#x3e;`)
+  and strips tags after decoding, and every Text in
+  the capsule renders with `Text.PlainText`, so a malicious notification can no
+  longer become rich text or make the shell fetch a URL.
 
 ## [0.1.0] - 2026-10-13
 

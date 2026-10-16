@@ -55,7 +55,7 @@ plugin's hardened launcher (see "Plugin additions") can take the
 
 This plugin adds Omarchy theme/wallpaper integration, fixes the bundled
 control center's Silent toggle, and hardens several bundled QML files against
-rich-text injection and the settings app against loose config permissions. Five
+rich-text injection and the settings app against loose config permissions. Six
 things differ from upstream 1.0.41:
 
 - `share/tide-island/scripts/omarchy-bridge.sh` — **new file**, written by this
@@ -74,12 +74,22 @@ things differ from upstream 1.0.41:
   `share/tide-island/qml/island/ClipboardLayer.qml`,
   `share/tide-island/qml/connectivity/BluetoothDeviceRow.qml`,
   `share/tide-island/qml/connectivity/ConnectivityDetailPanel.qml`,
-  `share/tide-island/qml/controlcenter/ControlCenterLayer.qml`, and
-  `share/tide-island/qml/island/BluetoothExpandedLayer.qml`. Qt Quick `Text`
+  `share/tide-island/qml/controlcenter/ControlCenterLayer.qml`,
+  `share/tide-island/qml/island/BluetoothExpandedLayer.qml`, and
+  `share/tide-island/qml/island/NotificationLayer.qml`. Qt Quick `Text`
   defaults to `Text.AutoText`, which parses inline HTML and can fetch remote
   images; these edits stop untrusted clipboard labels, Bluetooth device names,
-  device-supplied pairing PINs, and Wi-Fi SSIDs from being interpreted as rich
-  text.
+  device-supplied pairing PINs, Wi-Fi SSIDs, and notification text from being
+  interpreted as rich text.
+- `share/tide-island/DynamicIslandWindow.qml` — **modified**. The notification
+  capsule sanitizer (`cleanNotificationText`) previously stripped tags *before*
+  decoding character references, so an escaped tag such as `&lt;img src=x&gt;`
+  survived the strip and was decoded back into live markup that `Text.AutoText`
+  would then parse (and fetch the image URL). It now decodes references first —
+  the bare `&amp;` last, so a decode cannot re-open a fresh entity, and the
+  numeric forms of the tag delimiters (`&#60;`/`&#x3c;`, `&#62;`/`&#x3e;`) — and
+  strips tags *after* decoding, so an escaped tag is removed exactly like a
+  literal one.
 - `bin/tide-island-config-app` — **new file**, written by this plugin, and the
   upstream executable renamed to `bin/tide-island-config-app.real`. The settings
   app stores the optional TLP sudo password in
@@ -101,6 +111,6 @@ involved. The two functional deltas from upstream are recorded for auditability
 in `patches/tide/omarchy-theme-integration.patch` and
 `patches/tide/omarchy-silent-button-fix.patch` (paths relative to this
 directory; apply with `patch -p1`); the security-hardening edits are maintained
-as inline one-line edits and are not recorded as patch files. All modified QML
+as inline edits and are not recorded as patch files. All modified QML
 files remain under GPL-3.0-only; the original bridge script is MIT-licensed
 under the repository's root `LICENSE`.
