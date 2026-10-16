@@ -760,6 +760,7 @@ FocusScope {
                                 text: previewArea.currentEntry
                                     ? root.formatImageLabel(previewArea.currentEntry.label)
                                     : "Image"
+                                textFormat: Text.PlainText
                                 color: "#ffffff"
                                 font.family: root.textFontFamily
                                 font.pixelSize: 11
@@ -1076,6 +1077,7 @@ FocusScope {
                                 text: rowDelegate.model.imagePath !== ""
                                     ? root.formatImageLabel(rowDelegate.model.label)
                                     : rowDelegate.model.label
+                                textFormat: Text.PlainText
                                 color: rowDelegate.isSelected ? "#ffffff" : "#eaecf2"
                                 font.family: root.textFontFamily
                                 font.pixelSize: 12

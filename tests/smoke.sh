@@ -194,6 +194,40 @@ bash -n "$ROOT/vendor/tide-island/bin/tide-island" \
 grep -q 'GNU GENERAL PUBLIC LICENSE' "$ROOT/LICENSES/GPL-3.0-only.txt" \
   && t "GPL-3.0 text present" && ok || ko
 
+echo "  clipboard history renders clip labels as plain text"
+CLIP_QML="$ROOT/vendor/tide-island/share/tide-island/qml/island/ClipboardLayer.qml"
+# Qt Quick Text defaults to textFormat: Text.AutoText, so a clip whose text
+# looks like HTML (e.g. <img src="http://…">) would be parsed as rich text
+# and make the shell fetch a URL from clipboard content when history opens.
+# Every Text block that renders clip label content must declare
+# textFormat: Text.PlainText. Exit codes: 0 = ok, 1 = a violating block,
+# 2 = no label-rendering Text found (the check would pass vacuously).
+clip_label_rc=0
+awk '
+  /^[[:space:]]*Text \{/ && !inb { inb = 1; depth = 0; body = "" }
+  inb {
+    body = body $0 "\n"
+    line = $0
+    depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+    if (depth == 0) {
+      if (body ~ /rowDelegate\.model\.label|previewArea\.currentEntry\.label/) {
+        found++
+        if (body !~ /textFormat:[[:space:]]*Text\.PlainText/) bad++
+      }
+      inb = 0
+    }
+  }
+  END {
+    if (found == 0) exit 2
+    if (bad > 0) exit 1
+  }
+' "$CLIP_QML" || clip_label_rc=$?
+case $clip_label_rc in
+  0) t "every Text rendering clip labels sets Text.PlainText" && ok ;;
+  2) t "no Text renders clip labels - regression anchor missing" && ko ;;
+  *) t "a Text renders clip labels without Text.PlainText" && ko ;;
+esac
+
 echo "  Tide Island integration patch"
 mkdir -p "$tmp/theme-roundtrip"
 cp -a "$ROOT/vendor/tide-island/share" "$tmp/theme-roundtrip/"

@@ -27,6 +27,10 @@ All notable changes to the mehir.tide-island plugin.
 - Hardened the clipboard panel's image cache: decoded clipboard PNGs and their
   directory are private regardless of the inherited umask, and caches left
   world-readable by earlier builds are repaired in place.
+- Stopped parsing clipboard history entries as rich text: the clipboard
+  panel's clip labels now render with `Text.PlainText`, so a clip containing
+  markup (e.g. `<img src="…">`) can no longer make the shell fetch a URL
+  from clipboard content when history opens.
 
 ## [0.1.0] - 2026-10-13
 
