@@ -1753,6 +1753,7 @@ Item {
                             anchors.rightMargin: 8
                             anchors.bottom: parent.bottom
                             text: wifiStatusText
+                            textFormat: Text.PlainText
                             color: StyleTokens.textMuted
                             font.pixelSize: 10
                             font.family: textFontFamily
@@ -1879,6 +1880,7 @@ Item {
                             anchors.rightMargin: 8
                             anchors.bottom: parent.bottom
                             text: bluetoothStatusText
+                            textFormat: Text.PlainText
                             color: StyleTokens.textMuted
                             font.pixelSize: 10
                             font.family: textFontFamily

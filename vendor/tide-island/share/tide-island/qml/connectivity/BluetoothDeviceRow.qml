@@ -85,6 +85,7 @@ Rectangle {
             text: root.hasProvider && root.provider.bluetoothDeviceName
                 ? root.provider.bluetoothDeviceName(root.device)
                 : ""
+            textFormat: Text.PlainText
             color: StyleTokens.textPrimary
             font.pixelSize: 12
             font.family: root.textFontFamily

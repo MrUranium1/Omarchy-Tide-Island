@@ -196,37 +196,80 @@ grep -q 'GNU GENERAL PUBLIC LICENSE' "$ROOT/LICENSES/GPL-3.0-only.txt" \
 
 echo "  clipboard history renders clip labels as plain text"
 CLIP_QML="$ROOT/vendor/tide-island/share/tide-island/qml/island/ClipboardLayer.qml"
-# Qt Quick Text defaults to textFormat: Text.AutoText, so a clip whose text
-# looks like HTML (e.g. <img src="http://…">) would be parsed as rich text
-# and make the shell fetch a URL from clipboard content when history opens.
-# Every Text block that renders clip label content must declare
-# textFormat: Text.PlainText. Exit codes: 0 = ok, 1 = a violating block,
-# 2 = no label-rendering Text found (the check would pass vacuously).
-clip_label_rc=0
-awk '
-  /^[[:space:]]*Text \{/ && !inb { inb = 1; depth = 0; body = "" }
-  inb {
-    body = body $0 "\n"
-    line = $0
-    depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
-    if (depth == 0) {
-      if (body ~ /rowDelegate\.model\.label|previewArea\.currentEntry\.label/) {
-        found++
-        if (body !~ /textFormat:[[:space:]]*Text\.PlainText/) bad++
+# Qt Quick Text defaults to textFormat: Text.AutoText, so untrusted text
+# that looks like HTML (e.g. <img src="http://…">) is parsed as rich text
+# and makes the shell fetch a URL from that content when it renders.
+# Scans every Text block in a file: any block matching the anchor regex
+# must declare textFormat: Text.PlainText. Exit codes: 0 = ok, 1 = a
+# violating block, 2 = no anchored block found (would pass vacuously).
+require_text_plain() { # $1 = qml file, $2 = anchor regex for guarded Text blocks
+  awk -v anchor="$2" '
+    /^[[:space:]]*Text \{/ && !inb { inb = 1; depth = 0; body = "" }
+    inb {
+      body = body $0 "\n"
+      line = $0
+      depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+      if (depth == 0) {
+        if (body ~ anchor) {
+          found++
+          if (body !~ /textFormat:[[:space:]]*Text\.PlainText/) bad++
+        }
+        inb = 0
       }
-      inb = 0
     }
-  }
-  END {
-    if (found == 0) exit 2
-    if (bad > 0) exit 1
-  }
-' "$CLIP_QML" || clip_label_rc=$?
+    END {
+      if (found == 0) exit 2
+      if (bad > 0) exit 1
+    }
+  ' "$1"
+}
+clip_label_rc=0
+require_text_plain "$CLIP_QML" 'rowDelegate.model.label|previewArea.currentEntry.label' \
+  || clip_label_rc=$?
 case $clip_label_rc in
   0) t "every Text rendering clip labels sets Text.PlainText" && ok ;;
   2) t "no Text renders clip labels - regression anchor missing" && ko ;;
   *) t "a Text renders clip labels without Text.PlainText" && ko ;;
 esac
+
+echo "  bluetooth UI renders advertised device names as plain text"
+BT_QML="$ROOT/vendor/tide-island/share/tide-island/qml"
+# Nearby devices control their own advertised name, so every Text that
+# renders one (directly or concatenated into status/info/prompt strings)
+# must also force Text.PlainText.
+for bt_spec in \
+  "connectivity/BluetoothDeviceRow.qml:bluetoothDeviceName" \
+  "connectivity/ConnectivityDetailPanel.qml:bluetoothInfoMessage|bluetoothPairingTitle" \
+  "controlcenter/ControlCenterLayer.qml:bluetoothStatusText" \
+  "island/BluetoothExpandedLayer.qml:root.deviceName"; do
+  bt_file="$BT_QML/${bt_spec%%:*}"
+  bt_anchor="${bt_spec#*:}"
+  bt_rc=0
+  require_text_plain "$bt_file" "$bt_anchor" || bt_rc=$?
+  case $bt_rc in
+    0) t "$(basename "$bt_file"): device-name Text forces Text.PlainText" && ok ;;
+    2) t "$(basename "$bt_file"): no device-name Text found - anchor missing" && ko ;;
+    *) t "$(basename "$bt_file"): device-name Text renders without Text.PlainText" && ko ;;
+  esac
+done
+
+echo "  connectivity UI renders device-supplied codes and network names as plain text"
+# A pairing peer chooses its own PIN, and any nearby access point chooses its
+# own SSID, so every Text rendering one (directly or concatenated into status,
+# info, or prompt strings) must also force Text.PlainText.
+for net_spec in \
+  "connectivity/ConnectivityDetailPanel.qml:bluetoothPairingMessage : \"\"|wifiCurrentSsid : \"\"|wifiInfoMessage : \"\"|wifiPendingPasswordSsid : \"\"|text: displayName" \
+  "controlcenter/ControlCenterLayer.qml:text: wifiStatusText"; do
+  net_file="$BT_QML/${net_spec%%:*}"
+  net_anchor="${net_spec#*:}"
+  net_rc=0
+  require_text_plain "$net_file" "$net_anchor" || net_rc=$?
+  case $net_rc in
+    0) t "$(basename "$net_file"): pairing-code/SSID Text forces Text.PlainText" && ok ;;
+    2) t "$(basename "$net_file"): no pairing-code/SSID Text found - anchor missing" && ko ;;
+    *) t "$(basename "$net_file"): pairing-code/SSID Text renders without Text.PlainText" && ko ;;
+  esac
+done
 
 echo "  Tide Island integration patch"
 mkdir -p "$tmp/theme-roundtrip"

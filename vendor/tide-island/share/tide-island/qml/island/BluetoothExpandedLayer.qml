@@ -144,6 +144,7 @@ Item {
                         width: Math.max(0, parent.width - batteryText.implicitWidth - parent.spacing)
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.deviceName
+                        textFormat: Text.PlainText
                         color: "#ffffff"
                         font.pixelSize: userConfig.bodyFontSize - 1
                         font.family: root.textFontFamily

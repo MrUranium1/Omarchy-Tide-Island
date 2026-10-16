@@ -49,8 +49,9 @@ prefix.
 
 ## Plugin additions
 
-This plugin adds Omarchy theme/wallpaper integration and fixes the bundled
-control center's Silent toggle. Three things differ from upstream 1.0.41:
+This plugin adds Omarchy theme/wallpaper integration, fixes the bundled
+control center's Silent toggle, and hardens several bundled QML files against
+rich-text injection. Four things differ from upstream 1.0.41:
 
 - `share/tide-island/scripts/omarchy-bridge.sh` — **new file**, written by this
   plugin. A small, side-effect-free interface to Omarchy's theme state and its
@@ -63,11 +64,23 @@ control center's Silent toggle. Three things differ from upstream 1.0.41:
   The Silent button now atomically toggles SwayNotificationCenter's current
   Do Not Disturb state instead of choosing a direction from a potentially stale
   cached value, and reflects the state returned by the toggle command.
+- Security hardening — **modified** (inline, one extra `textFormat:
+  Text.PlainText` property per rendering site):
+  `share/tide-island/qml/island/ClipboardLayer.qml`,
+  `share/tide-island/qml/connectivity/BluetoothDeviceRow.qml`,
+  `share/tide-island/qml/connectivity/ConnectivityDetailPanel.qml`,
+  `share/tide-island/qml/controlcenter/ControlCenterLayer.qml`, and
+  `share/tide-island/qml/island/BluetoothExpandedLayer.qml`. Qt Quick `Text`
+  defaults to `Text.AutoText`, which parses inline HTML and can fetch remote
+  images; these edits stop untrusted clipboard labels, Bluetooth device names,
+  device-supplied pairing PINs, and Wi-Fi SSIDs from being interpreted as rich
+  text.
 
 All are copied verbatim to the install prefix, so no install-time patching is
-involved. The deltas from upstream are recorded for auditability in
-`patches/tide/omarchy-theme-integration.patch` and
+involved. The two functional deltas from upstream are recorded for auditability
+in `patches/tide/omarchy-theme-integration.patch` and
 `patches/tide/omarchy-silent-button-fix.patch` (paths relative to this
-directory; apply with `patch -p1`). Both modified QML files remain under
-GPL-3.0-only; the original bridge script is MIT-licensed under the repository's
-root `LICENSE`.
+directory; apply with `patch -p1`); the security-hardening edits are maintained
+as inline one-line edits and are not recorded as patch files. All modified QML
+files remain under GPL-3.0-only; the original bridge script is MIT-licensed
+under the repository's root `LICENSE`.

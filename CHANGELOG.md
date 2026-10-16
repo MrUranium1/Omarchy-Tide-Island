@@ -31,6 +31,16 @@ All notable changes to the mehir.tide-island plugin.
   panel's clip labels now render with `Text.PlainText`, so a clip containing
   markup (e.g. `<img src="…">`) can no longer make the shell fetch a URL
   from clipboard content when history opens.
+- Stopped parsing nearby Bluetooth devices' advertised names as rich text:
+  the control center and island now render device names (and the status,
+  info, and pairing-prompt strings that embed them) with `Text.PlainText`,
+  so a malicious device name containing markup cannot make the shell fetch
+  a URL when the device list or pairing prompt renders.
+- Stopped parsing device-supplied Bluetooth pairing codes and nearby Wi-Fi
+  network names (SSIDs) as rich text: the pairing prompt's PIN/passkey message
+  and every control-center and detail Text that renders an SSID now use
+  `Text.PlainText`, so a maliciously named access point or a hostile pairing
+  PIN cannot make the shell fetch a URL.
 
 ## [0.1.0] - 2026-10-13
 

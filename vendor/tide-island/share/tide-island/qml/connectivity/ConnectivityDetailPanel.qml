@@ -223,6 +223,7 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: 24
                         text: root.provider ? root.provider.wifiCurrentSsid : ""
+                        textFormat: Text.PlainText
                         color: StyleTokens.textPrimary
                         font.pixelSize: 12
                         font.family: root.textFontFamily
@@ -266,6 +267,7 @@ Item {
                 width: parent.width
                 visible: root.provider && root.provider.wifiInfoMessage.length > 0 && root.isWifi
                 text: root.provider ? root.provider.wifiInfoMessage : ""
+                textFormat: Text.PlainText
                 color: StyleTokens.accentSoft
                 font.pixelSize: 11
                 font.family: root.textFontFamily
@@ -296,6 +298,7 @@ Item {
                 width: parent.width
                 visible: root.provider && root.provider.bluetoothInfoMessage.length > 0 && root.isBluetooth
                 text: root.provider ? root.provider.bluetoothInfoMessage : ""
+                textFormat: Text.PlainText
                 color: StyleTokens.accentSoft
                 font.pixelSize: 11
                 font.family: root.textFontFamily
@@ -343,6 +346,7 @@ Item {
                         Text {
                             width: parent.width
                             text: root.provider ? root.provider.bluetoothPairingTitle : ""
+                            textFormat: Text.PlainText
                             color: StyleTokens.textPrimary
                             font.pixelSize: 12
                             font.family: root.textFontFamily
@@ -353,6 +357,7 @@ Item {
                         Text {
                             width: parent.width
                             text: root.provider ? root.provider.bluetoothPairingMessage : ""
+                            textFormat: Text.PlainText
                             color: "#d2d4da"
                             font.pixelSize: 11
                             font.family: root.textFontFamily
@@ -512,6 +517,7 @@ Item {
                         anchors.top: parent.top
                         anchors.right: parent.right
                         text: "Enter password for " + (root.provider ? root.provider.wifiPendingPasswordSsid : "")
+                        textFormat: Text.PlainText
                         color: StyleTokens.textPrimary
                         font.pixelSize: 12
                         font.family: root.textFontFamily
@@ -757,6 +763,7 @@ Item {
                                 anchors.right: rightInfo.left
                                 anchors.rightMargin: 8
                                 text: displayName
+                                textFormat: Text.PlainText
                                 color: StyleTokens.textPrimary
                                 font.pixelSize: 12
                                 font.family: root.textFontFamily
