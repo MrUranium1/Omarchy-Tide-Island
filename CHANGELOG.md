@@ -41,6 +41,15 @@ All notable changes to the mehir.tide-island plugin.
   and every control-center and detail Text that renders an SSID now use
   `Text.PlainText`, so a maliciously named access point or a hostile pairing
   PIN cannot make the shell fetch a URL.
+- Kept the Tide Island settings config private. It can hold an optional TLP
+  sudo password, but was created `0644` and the settings app's `QSaveFile` save
+  set no permissions. The plugin now seeds `~/.config/tide-island` `0700` and
+  `userconfig.json` `0600`, repairs permissive files from earlier builds in
+  place (without following symlinks), and launches the settings app through a
+  hardened wrapper that forces `umask 077` so every save (including the
+  QSaveFile temp file) stays user-only. If the password file would still be
+  readable by others after repair, the wrapper refuses to start the GUI instead
+  of running with the loose mode.
 
 ## [0.1.0] - 2026-10-13
 

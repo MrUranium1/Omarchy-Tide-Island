@@ -212,11 +212,12 @@ Desktop entries and the bundled runtime are tracked by content fingerprint: anyt
 ## 🧪 Tests
 
 ```sh
-bash tests/unit.sh       # offline: sync state machine, config parity, patch applicability
-bash tests/cliphist.sh   # offline: clipboard image cache privacy (cliphist-helper.sh)
-bash tests/smoke.sh      # repo self-check, incl. shell schema validation and shortcut collisions
-bash tests/cleanroom.sh  # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
-bash tests/live.sh       # needs a live Omarchy session; toggles bar/Tide and verifies
+bash tests/unit.sh         # offline: sync state machine, config parity, patch applicability
+bash tests/cliphist.sh     # offline: clipboard image cache privacy (cliphist-helper.sh)
+bash tests/config-perms.sh # offline: settings config permissions (0700/0600, hardened launcher)
+bash tests/smoke.sh        # repo self-check, incl. shell schema validation and shortcut collisions
+bash tests/cleanroom.sh    # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
+bash tests/live.sh         # needs a live Omarchy session; toggles bar/Tide and verifies
 ```
 
 `cleanroom.sh` fakes `omarchy`, `omarchy-shell` and `systemctl` inside a disposable `$HOME`, so it's safe to run on a real machine.

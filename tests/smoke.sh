@@ -164,6 +164,7 @@ for f in "Service.qml" "default/tide-island.json" "default/tide-userconfig.json"
          "scripts/tide-sync.sh" "scripts/ensure-suppression.sh" "scripts/install-dependencies.sh" \
          "scripts/install-tide-runtime.sh" "scripts/plugin-setup.sh" "scripts/patch-tide-lyrics.sh" \
          "scripts/ensure-mount.sh" "scripts/teardown.sh" "scripts/wire-shortcuts.sh" \
+         "scripts/harden-tide-config.sh" \
          "bin/omarchy-tide-island-toggle" "bin/omarchy-tide-island-status" \
          "patches/omarchy-osd-suppression.patch" "patches/omarchy-notifications-suppression.patch" \
          "patches/tide/swipe-lyrics-no-cover.patch"; do
@@ -174,6 +175,7 @@ echo "  vendored Tide Island runtime"
 for f in "vendor/tide-island/VERSION" "vendor/tide-island/PROVENANCE.md" \
          "vendor/tide-island/bin/tide-island" \
          "vendor/tide-island/bin/tide-island-config-app" \
+         "vendor/tide-island/bin/tide-island-config-app.real" \
          "vendor/tide-island/lib/libIslandBackend.so" \
          "vendor/tide-island/lib/qt6/qml/TideIsland/qmldir" \
          "vendor/tide-island/lib/qt6/qml/IslandBackend/qmldir" \
@@ -186,8 +188,14 @@ for f in "vendor/tide-island/VERSION" "vendor/tide-island/PROVENANCE.md" \
 done
 bash -n "$ROOT/vendor/tide-island/bin/tide-island" \
   && t "vendored launcher parses" && ok || ko
+bash -n "$ROOT/vendor/tide-island/bin/tide-island-config-app" \
+  && t "hardened settings launcher parses" && ok || ko
 [[ -x "$ROOT/vendor/tide-island/bin/tide-island-config-app" ]] \
   && t "config app is executable" && ok || ko
+[[ -x "$ROOT/vendor/tide-island/bin/tide-island-config-app.real" ]] \
+  && t "native settings app is executable" && ok || ko
+grep -q 'umask 077' "$ROOT/vendor/tide-island/bin/tide-island-config-app" \
+  && t "settings launcher forces a user-only umask" && ok || ko
 ! grep -q 'Exec=/usr' "$ROOT/vendor/tide-island/share/applications/tide-island.desktop" \
     "$ROOT/vendor/tide-island/share/applications/tide-island-config.desktop" \
   && t "desktop entries resolve via PATH (no /usr Exec)" && ok || ko

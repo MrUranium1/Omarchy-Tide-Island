@@ -160,6 +160,10 @@ PREFIX="$HOME/.local/share/omarchy-tide-island"
 [[ -f "$CONFIG" ]] && ok "config seeded" || ko "config not seeded"
 [[ -f "$TIDE_USERCONFIG" ]] && cmp -s "$TIDE_USERCONFIG" "$ROOT/default/tide-userconfig.json" \
   && ok "Tide userconfig seeded with the default look" || ko "Tide userconfig not seeded"
+[[ "$(stat -c '%a' "$HOME/.config/tide-island")" == 700 ]] \
+  && ok "Tide config directory is 0700" || ko "Tide config directory not 0700"
+[[ "$(stat -c '%a' "$TIDE_USERCONFIG")" == 600 ]] \
+  && ok "Tide userconfig is 0600 (it can hold a sudo password)" || ko "Tide userconfig not 0600"
 jq -e '.tideUserConfig.seeded == true' "$STATE/installed.json" >/dev/null 2>&1 \
   && ok "installed.json records the Tide config seed" || ko "installed.json missing tideUserConfig"
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "osd clone patched" || ko "osd clone not patched"
@@ -218,9 +222,17 @@ find "$STATE/backups" -maxdepth 1 -type f -name '*.tide-island.*.json' -print -q
   && ok "configuration recovery backup is retained" || ko "config backup is missing"
 
 echo "  reinstall"
+# Loose permissions from an earlier build (dir 0755, file 0644) must be
+# repaired on reinstall without touching the contents.
+chmod 0755 "$HOME/.config/tide-island"
+chmod 0644 "$TIDE_USERCONFIG"
 (cd "$ROOT" && bash install.sh) >"$SB/i3.log" 2>&1 && ok "reinstall exits 0" || { ko "reinstall failed"; tail -n20 "$SB/i3.log"; }
 grep -q 'The bar-off marker' "$PLUGINS/mehir.osd/Osd.qml" 2>/dev/null && ok "reinstalled cleanly" || ko "reinstall incomplete"
 [[ -f "$TIDE_USERCONFIG" ]] && ok "Tide config re-seeded on reinstall" || ko "Tide config not re-seeded"
+[[ "$(stat -c '%a' "$HOME/.config/tide-island")" == 700 ]] \
+  && ok "reinstall repairs a permissive config directory to 0700" || ko "config directory left permissive"
+[[ "$(stat -c '%a' "$TIDE_USERCONFIG")" == 600 ]] \
+  && ok "reinstall repairs a world-readable userconfig to 0600" || ko "userconfig left world-readable"
 
 echo "  customized Tide config survives uninstall"
 echo '{ "islandWidth": 200 }' >"$TIDE_USERCONFIG"

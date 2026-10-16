@@ -84,16 +84,26 @@ bash "$ROOT/scripts/install-tide-runtime.sh" \
 # userconfig.json once — only when the user has no Tide config yet, and never
 # overwritten afterwards. Every key we omit falls back to Tide's compiled
 # defaults, so only these five values are "ours".
-tide_userconfig="$HOME/.config/tide-island/userconfig.json"
+#
+# The directory is kept 0700 and the file 0600 because the settings app stores
+# the optional TLP sudo password in this file (see scripts/harden-tide-config.sh
+# and the hardened launcher in vendor/tide-island/bin/).
+tide_config_dir="$HOME/.config/tide-island"
+tide_userconfig="$tide_config_dir/userconfig.json"
 seed_tide_userconfig=0
+mkdir -p "$tide_config_dir"
+chmod 0700 "$tide_config_dir" 2>/dev/null || true
 if [[ -f $tide_userconfig ]]; then
   log "Tide user config exists ($tide_userconfig); keeping it and its user's values."
 else
-  mkdir -p "$(dirname "$tide_userconfig")"
-  install -m 0644 "$ROOT/default/tide-userconfig.json" "$tide_userconfig"
+  install -m 0600 "$ROOT/default/tide-userconfig.json" "$tide_userconfig"
   seed_tide_userconfig=1
   log "seeded $tide_userconfig with the plugin default look (status/top/opacity/36x140)."
 fi
+# Repair permissions left loose by earlier builds (mode bits only; contents are
+# never rewritten), so an existing installation's secret stops being readable.
+bash "$ROOT/scripts/harden-tide-config.sh" "$tide_config_dir" \
+  || log "could not fully tighten Tide config permissions; check $tide_config_dir." >&2
 
 # -------------------------------------------------------------- CLI shims
 

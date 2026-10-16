@@ -15,7 +15,9 @@ package. It is third-party software, **not** part of this plugin's own MIT code.
 
 ```
 bin/tide-island                     launcher script (verbatim from the package)
-bin/tide-island-config-app          settings GUI (compiled from upstream source)
+bin/tide-island-config-app          hardened launcher for the settings GUI
+                                    (added by this plugin — see "Plugin additions")
+bin/tide-island-config-app.real     settings GUI (compiled from upstream source)
 lib/libIslandBackend.so             compiled backend shared library
 lib/qt6/qml/TideIsland/             QML module (incl. the config-app QML)
 lib/qt6/qml/IslandBackend/          QML module (qmldir + plugin)
@@ -38,20 +40,23 @@ commit above, with the plugin additions described below. Their corresponding
 source is the upstream repository at that commit; see the GPL-3.0-only text for
 the license terms.
 
-The one exception among the copied files is `bin/tide-island-config-app`, which
-is compiled from the `Tide-island-app/` source at the same upstream commit (the
-upstream CMake build, `-DCMAKE_INSTALL_PREFIX=/usr`, release build, no patches)
-rather than copied from a binary package. Its own QML is embedded in the binary
-as Qt resources; `share/applications/tide-island-config.desktop` differs from
-upstream only in that `Exec=tide-island-config-app` resolves via `PATH` instead
-of a hardcoded `/usr/bin/` prefix, so the same entry works for the bundled
-prefix.
+The one exception among the copied files is `bin/tide-island-config-app.real`,
+which is compiled from the `Tide-island-app/` source at the same upstream commit
+(the upstream CMake build, `-DCMAKE_INSTALL_PREFIX=/usr`, release build, no
+patches) rather than copied from a binary package. Its own QML is embedded in
+the binary as Qt resources; `share/applications/tide-island-config.desktop`
+differs from upstream only in that `Exec=tide-island-config-app` resolves via
+`PATH` instead of a hardcoded `/usr/bin/` prefix, so the same entry works for
+the bundled prefix. The executable was renamed to `…-config-app.real` so the
+plugin's hardened launcher (see "Plugin additions") can take the
+`tide-island-config-app` name every caller already resolves.
 
 ## Plugin additions
 
 This plugin adds Omarchy theme/wallpaper integration, fixes the bundled
 control center's Silent toggle, and hardens several bundled QML files against
-rich-text injection. Four things differ from upstream 1.0.41:
+rich-text injection and the settings app against loose config permissions. Five
+things differ from upstream 1.0.41:
 
 - `share/tide-island/scripts/omarchy-bridge.sh` — **new file**, written by this
   plugin. A small, side-effect-free interface to Omarchy's theme state and its
@@ -75,6 +80,21 @@ rich-text injection. Four things differ from upstream 1.0.41:
   images; these edits stop untrusted clipboard labels, Bluetooth device names,
   device-supplied pairing PINs, and Wi-Fi SSIDs from being interpreted as rich
   text.
+- `bin/tide-island-config-app` — **new file**, written by this plugin, and the
+  upstream executable renamed to `bin/tide-island-config-app.real`. The settings
+  app stores the optional TLP sudo password in
+  `~/.config/tide-island/userconfig.json` through `QSaveFile`, which sets no
+  explicit permissions (a new file gets `0666 & ~umask`, an existing file keeps
+  its mode). Since the app is shipped prebuilt, the launcher enforces
+  permissions at the process boundary instead: it applies `umask 077` before
+  exec'ing the app (so the `QSaveFile` temporary file and the file it is
+  atomically renamed onto are user-only) and repairs an existing config
+  directory/file to `0700`/`0600` in place, without following symlinks. If the
+  password file would still be readable by other users after repair, the
+  launcher refuses to start the GUI rather than run with the loose mode (the
+  non-GUI `--ensure-niri-shortcuts` path, which never touches the password, is
+  allowed through with a warning). See `scripts/harden-tide-config.sh` for the
+  install-time repair.
 
 All are copied verbatim to the install prefix, so no install-time patching is
 involved. The two functional deltas from upstream are recorded for auditability
