@@ -217,6 +217,8 @@ bash tests/unit.sh         # offline: sync state machine, config parity, patch a
 bash tests/cliphist.sh     # offline: clipboard image cache privacy (cliphist-helper.sh)
 bash tests/config-perms.sh # offline: settings config permissions (0700/0600, hardened launcher)
 bash tests/migrate.sh      # offline: upgrade migration (existing setup, old runtime, loose config)
+bash tests/notification-text.sh # offline: notification content rendered as plain text (sanitizer order)
+bash tests/player-metadata-text.sh # offline: MPRIS title/artist/lyrics rendered as plain text
 bash tests/smoke.sh        # repo self-check, incl. shell schema validation and shortcut collisions
 bash tests/cleanroom.sh    # full install -> upgrade -> uninstall -> reinstall in a throwaway $HOME
 bash tests/live.sh         # needs a live Omarchy session; toggles bar/Tide and verifies

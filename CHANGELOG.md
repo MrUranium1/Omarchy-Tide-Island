@@ -69,6 +69,14 @@ All notable changes to the mehir.tide-island plugin.
   and strips tags after decoding, and every Text in
   the capsule renders with `Text.PlainText`, so a malicious notification can no
   longer become rich text or make the shell fetch a URL.
+- Stopped parsing MPRIS media metadata as rich text. The expanded player
+  (`ExpandedPlayerLayer`) and the media strip (`SwipeLyricsLayer`,
+  `SwipeCustomInfoLayer`) rendered the track title, artist, lyrics, and track
+  name — all chosen by whichever MPRIS player is active — with Qt Quick's
+  default `Text.AutoText`, so markup such as `<img src="http://evil/">` in the
+  metadata was parsed and fetched whenever the player appeared, including the
+  automatic expansion on track change. Every Text rendering that metadata now
+  forces `Text.PlainText`.
 
 ## [0.1.0] - 2026-10-13
 

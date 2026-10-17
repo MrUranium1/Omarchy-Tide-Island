@@ -326,6 +326,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.boundedTextWidth
                     text: modelData.text || ""
+                    textFormat: Text.PlainText
                     color: "white"
                     font.pixelSize: root.textPixelSize
                     font.family: root.textFontFamily

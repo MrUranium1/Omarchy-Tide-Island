@@ -314,6 +314,7 @@ Item {
 
                                 Text {
                                     text: currentTrack
+                                    textFormat: Text.PlainText
                                     color: "white"
                                     font.pixelSize: userConfig.bodyFontSize
                                     font.family: textFontFamily
@@ -325,6 +326,7 @@ Item {
 
                                 Text {
                                     text: currentArtist
+                                    textFormat: Text.PlainText
                                     color: "#8e8e93"
                                     font.pixelSize: userConfig.bodyFontSize - 2
                                     font.family: textFontFamily

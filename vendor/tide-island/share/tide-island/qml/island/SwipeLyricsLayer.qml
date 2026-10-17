@@ -226,6 +226,7 @@ Item {
                 y: root.lyricBaselineY - baselineOffset - 14 * root.lyricChangeProgress
                 width: parent.width
                 text: root.previousLyricText
+                textFormat: Text.PlainText
                 color: "white"
                 opacity: 1 - root.lyricChangeProgress
                 font.pixelSize: root.textPixelSize
@@ -243,6 +244,7 @@ Item {
                     + (root.previousLyricText !== "" ? 12 * (1 - root.lyricChangeProgress) : 0)
                 width: parent.width
                 text: root.activeLyricText
+                textFormat: Text.PlainText
                 color: "white"
                 opacity: root.previousLyricText !== "" ? root.lyricChangeProgress : 1
                 font.pixelSize: root.textPixelSize

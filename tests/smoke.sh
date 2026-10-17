@@ -293,6 +293,27 @@ case $notif_rc in
   *) t "a Text renders notification content without Text.PlainText" && ko ;;
 esac
 
+echo "  player media metadata renders as plain text"
+# A media player chooses the track title/artist it advertises, and the player
+# panel appears automatically on track change. Untrusted metadata that looks
+# like HTML (<img src=…>) would otherwise be parsed by Text.AutoText and make
+# the shell fetch a URL. Every Text rendering a title, artist, lyric, or track
+# name must force PlainText. (tests/player-metadata-text.sh covers this too.)
+for media_spec in \
+  "island/ExpandedPlayerLayer.qml:text: currentTrack|text: currentArtist" \
+  "island/SwipeLyricsLayer.qml:text: root.previousLyricText|text: root.activeLyricText" \
+  "island/SwipeCustomInfoLayer.qml:text: modelData.text"; do
+  media_file="$BT_QML/${media_spec%%:*}"
+  media_anchor="${media_spec#*:}"
+  media_rc=0
+  require_text_plain "$media_file" "$media_anchor" || media_rc=$?
+  case $media_rc in
+    0) t "$(basename "$media_file"): title/artist Text forces Text.PlainText" && ok ;;
+    2) t "$(basename "$media_file"): no title/artist Text found - anchor missing" && ko ;;
+    *) t "$(basename "$media_file"): title/artist Text renders without Text.PlainText" && ko ;;
+  esac
+done
+
 echo "  Tide Island integration patch"
 mkdir -p "$tmp/theme-roundtrip"
 cp -a "$ROOT/vendor/tide-island/share" "$tmp/theme-roundtrip/"

@@ -75,12 +75,17 @@ things differ from upstream 1.0.41:
   `share/tide-island/qml/connectivity/BluetoothDeviceRow.qml`,
   `share/tide-island/qml/connectivity/ConnectivityDetailPanel.qml`,
   `share/tide-island/qml/controlcenter/ControlCenterLayer.qml`,
-  `share/tide-island/qml/island/BluetoothExpandedLayer.qml`, and
-  `share/tide-island/qml/island/NotificationLayer.qml`. Qt Quick `Text`
+  `share/tide-island/qml/island/BluetoothExpandedLayer.qml`,
+  `share/tide-island/qml/island/NotificationLayer.qml`,
+  `share/tide-island/qml/island/ExpandedPlayerLayer.qml`,
+  `share/tide-island/qml/island/SwipeLyricsLayer.qml`, and
+  `share/tide-island/qml/island/SwipeCustomInfoLayer.qml`. Qt Quick `Text`
   defaults to `Text.AutoText`, which parses inline HTML and can fetch remote
   images; these edits stop untrusted clipboard labels, Bluetooth device names,
-  device-supplied pairing PINs, Wi-Fi SSIDs, and notification text from being
-  interpreted as rich text.
+  device-supplied pairing PINs, Wi-Fi SSIDs, notification text, and MPRIS
+  track titles/artists/lyrics (media metadata chosen by the player, rendered
+  by the expanded player and the media strip) from being interpreted as rich
+  text.
 - `share/tide-island/DynamicIslandWindow.qml` — **modified**. The notification
   capsule sanitizer (`cleanNotificationText`) previously stripped tags *before*
   decoding character references, so an escaped tag such as `&lt;img src=x&gt;`
