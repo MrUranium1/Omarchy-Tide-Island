@@ -259,26 +259,74 @@ Item {
     // runtime, CLI shims and OSD/notification stand-down once, silently, so
     // adding the plugin is enough. The setup-complete marker is written by the
     // detached ensure-mount step only once the patched OSD/notifications clones
-    // are actually SERVING at runtime (not merely present on disk), so an
-    // install whose popups are still handled by the old code retries on the
-    // next shell start. Re-run manually any time with `omarchy-shell
-    // tide-island setup`.
+    // are actually SERVING at runtime (not merely present on disk).
+    //
+    // The marker is therefore the only proof setup SUCCEEDED. While it is
+    // absent, a naive "retry install on every load" re-runs install.sh on each
+    // shell start, and each run bounces the mounted plugin set (up to five
+    // `omarchy-shell shell rescanPlugins` reloads) trying to converge the
+    // re-cloned OSD/notifications clones — a visible multi-blink storm at every
+    // startup. Auto-setup is therefore BOUNDED: every attempt is recorded in
+    // auto-setup.state and only re-runs after a cooldown, giving up after
+    // maxAutoSetupAttempts so a setup that cannot converge stops looping and the
+    // desktop returns to a single clean startup. Manual recovery stays open via
+    // `omarchy-shell tide-island setup`, which runs install.sh directly and is
+    // never gated by this budget. Seeing the marker resets the budget, so a
+    // later genuine reinstall starts fresh.
     property bool autoSetupTried: false
-    readonly property string autoSetupMarker:
-        home + "/.local/state/omarchy/tide-island/auto-setup.done"
+    // The marker and budget paths are spelled once, inline in the
+    // setupGateProbe command below, matching how this file's other
+    // $HOME-based probes (barProbe, flipProc) write their paths — the two used
+    // to also exist as path properties here, a duplicate source of truth that
+    // could drift from the gate. Only the bound values are named properties.
+    readonly property int maxAutoSetupAttempts: 3
+    readonly property int autoSetupCooldownSec: 300
 
     function maybeAutoSetup() {
         if (plugin.autoSetupTried) return
         plugin.autoSetupTried = true
         if (setupScript === "" || !plugin.setupNeeded()) return
-        markerProbe.running = true
+        setupGateProbe.running = true
     }
 
+    // Gate + record in one step so a setup that cannot converge is bounded to
+    // maxAutoSetupAttempts runs spaced by autoSetupCooldownSec, instead of one
+    // full install.sh (and its shell-bounce loop) on every shell load.
     Process {
-        id: markerProbe
+        id: setupGateProbe
         running: false
-        command: ["bash", "-c", "test -f \"$1\"", "--", plugin.autoSetupMarker]
-        onExited: (code) => { if (code !== 0) autoSetupProc.running = true }
+        command: ["bash", "-c",
+            "d=\"$HOME/.local/state/omarchy/tide-island\"; " +
+            "m=\"$d/auto-setup.done\"; s=\"$d/auto-setup.state\"; " +
+            "mkdir -p \"$d\"; " +
+            "if [[ -f \"$m\" ]]; then " +
+            "  if [[ -f \"$s\" ]] && command -v jq >/dev/null 2>&1; then " +
+            "    jq '.attempts=0 | .lastAttempt=0' \"$s\" >\"$s.tmp\" 2>/dev/null && mv -f \"$s.tmp\" \"$s\"; " +
+            "  fi; " +
+            "  echo gate=no:marker; exit 0; " +
+            "fi; " +
+            "now=$(date +%s); attempts=0; last=0; " +
+            "if [[ -f \"$s\" ]] && command -v jq >/dev/null 2>&1; then " +
+            "  attempts=$(jq -r '.attempts // 0' \"$s\" 2>/dev/null || echo 0); " +
+            "  last=$(jq -r '.lastAttempt // 0' \"$s\" 2>/dev/null || echo 0); " +
+            "fi; " +
+            "if (( attempts >= " + plugin.maxAutoSetupAttempts + " )); then echo gate=no:exhausted; exit 0; fi; " +
+            "if (( now - last < " + plugin.autoSetupCooldownSec + " )); then echo gate=no:cooldown; exit 0; fi; " +
+            "printf '{\"attempts\":%d,\"lastAttempt\":%d}\\n' \"$((attempts+1))\" \"$now\" >\"$s\"; " +
+            "echo gate=yes"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var out = String(text).trim()
+                if (out.indexOf("gate=yes") >= 0) {
+                    autoSetupProc.running = true
+                } else {
+                    var reason = out.replace(/^gate=/, "") || "no-gate"
+                    console.log("tide-island: auto-setup skipped (" + reason +
+                        "); bounded retries stop a startup bounce loop. " +
+                        "Run `omarchy-shell tide-island setup` to force.")
+                }
+            }
+        }
     }
     Process {
         id: autoSetupProc

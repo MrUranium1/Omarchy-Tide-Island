@@ -509,6 +509,16 @@ if [[ -f $STATE_DIR/auto-setup.done ]]; then
   log "cleared the setup-complete marker so a re-add sets up again."
 fi
 
+# The bounded auto-setup attempt budget (auto-setup.state) is per-install too:
+# leave it behind and attempts from earlier cycles keep accumulating until the
+# bound exhausts and a later reinstall's setup is silently skipped. Clear it
+# alongside the marker so every re-add starts from a fresh budget. (Auto-setup
+# is bounded to stop a startup bounce loop; see Service.qml setupGateProbe.)
+if [[ -f $STATE_DIR/auto-setup.state ]]; then
+  rm -f "$STATE_DIR/auto-setup.state"
+  log "cleared the auto-setup attempt budget so a re-add starts fresh."
+fi
+
 # ------------------------------------------------------------------- final
 
 if (( opt_final )); then

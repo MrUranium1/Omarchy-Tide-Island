@@ -77,6 +77,21 @@ All notable changes to the mehir.tide-island plugin.
   metadata was parsed and fetched whenever the player appeared, including the
   automatic expansion on track change. Every Text rendering that metadata now
   forces `Text.PlainText`.
+- Stopped the auto-setup from bouncing the shell at every startup. The
+  setup-complete marker is written only once the patched OSD/notifications
+  clones are verified serving at runtime, so a setup that could not converge
+  (e.g. after an uninstall/reinstall) left it missing and the service re-ran
+  `install.sh` on every load — each run bouncing the mounted plugin set up to
+  five times, a visible multi-blink storm at every login. Auto-setup is now
+  bounded: each attempt is recorded in `auto-setup.state` and only re-runs
+  after a cooldown, giving up after `maxAutoSetupAttempts` so the desktop
+  returns to a single clean startup. Removal (the uninstall/teardown path)
+  now clears that attempt budget alongside the marker, so each re-install
+  starts fresh instead of inheriting a budget earlier cycles had drawn down to
+  exhaustion. Manual recovery via `omarchy-shell tide-island setup` is never
+  gated, seeing the marker resets the budget, and the per-load upgrade
+  migration is untouched so the hardened launcher and config-privacy repair
+  still run.
 
 ## [0.1.0] - 2026-10-13
 
